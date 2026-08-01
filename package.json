@@ -1,0 +1,24 @@
+{
+  "name": "crypt-of-secrets",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "init-tailwind": "tailwindcss init"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RhichelleStrauss/Crypt-of-Secrets.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/RhichelleStrauss/Crypt-of-Secrets/issues"
+  },
+  "homepage": "https://github.com/RhichelleStrauss/Crypt-of-Secrets#readme",
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.3.3",
+    "tailwindcss": "^4.3.3"
+  }
+}
