@@ -18,7 +18,7 @@
 6. [Design Concept](#6-design-concept)
 7. [Highlights and Challenges](#7-highlights-and-challenges)
 8. [Roadmap – Future Improvements](#8-roadmap--future-improvements)
-9. [Contributing and License](#9-contributing-and-license)
+9. [License](#9-license)
 10. [Authors and Contact Info](#10-authors-and-contact-info)
 11. [Acknowledgements](#11-acknowledgements)
 
@@ -229,15 +229,7 @@ The visual identity of Crypt of Secrets draws heavily from *Cult of the Lamb*'s 
 
 ---
 
-## 9. Contributing and License
-
-Any contributions to this project are **greatly appreciated!** It inspires us and helps us all learn! To add any contributions follow these steps :)
-
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature-name`
-3. Commit your changes: `git commit -am 'Add feature'`
-4. Push to the branch: `git push origin feature-name`
-5. Open a pull request
+## 9. License
 
 ### License
 
