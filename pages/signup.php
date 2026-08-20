@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Log In - Crypt of Secrets</title>
     
-    <!-- Google Fonts: Eczar -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Eczar:wght@400..800&display=swap" rel="stylesheet">
@@ -51,34 +50,33 @@
                 <div class="flex flex-col">
                     <label for="name" class="text-lg tracking-wide mb-1">Name:</label>
                     <input type="text" id="name" name="name" placeholder="Enter your name" 
-                           class="w-full bg-[#0a0a0a] text-[#FAEAC9] px-4 py-3 outline-none focus:ring-1 focus:ring-[#7A0A0A] shadow-inner">
+                           class="w-full bg-[#0a0a0a] text-[#FAEAC9] px-4 py-3 outline-none focus:ring-1 focus:ring-[#7A0A0A] shadow-inner rounded-md">
                 </div>
 
                 <div class="flex flex-col">
                     <label for="email" class="text-lg tracking-wide mb-1">Email:</label>
                     <input type="email" id="email" name="email" placeholder="Enter your email" 
-                           class="w-full bg-[#0a0a0a] text-[#FAEAC9] px-4 py-3 outline-none focus:ring-1 focus:ring-[#7A0A0A] shadow-inner">
+                           class="w-full bg-[#0a0a0a] text-[#FAEAC9] px-4 py-3 outline-none focus:ring-1 focus:ring-[#7A0A0A] shadow-inner rounded-md">
                 </div>
 
                 <div class="flex flex-col">
                     <label for="password" class="text-lg tracking-wide mb-1">Password:</label>
                     <input type="password" id="password" name="password" placeholder="••••••••" 
-                           class="w-full bg-[#0a0a0a] text-[#FAEAC9] px-4 py-3 outline-none focus:ring-1 focus:ring-[#7A0A0A] shadow-inner">
+                           class="w-full bg-[#0a0a0a] text-[#FAEAC9] px-4 py-3 outline-none focus:ring-1 focus:ring-[#7A0A0A] shadow-inner rounded-md">
                 </div>
 
                 
-                <button type="submit" class="relative mt-8 mx-auto flex items-center justify-center group transition-transform duration-200 hover:scale-105 active:scale-95">
+            <button type="submit" class="relative mt-6 mx-auto flex items-center justify-center group bg-transparent border-none cursor-pointer">
     
-   
-    <img src="/Crypt-of-Secrets/assets/images/CryptButtonRedder.png" alt="Sign Up" class="w-64 h-auto drop-shadow-md">
+    <img src="/Crypt-of-Secrets/assets/images/CryptDefaultButton.png" 
+         class="h-[70px] w-auto object-contain transition-transform duration-300 ease-out group-hover:scale-110" 
+         alt="">
     
-   
-    <span class="absolute text-red-700 font-bold text-3xl tracking-widest uppercase -translate-y-6 group-hover:text-red-600 transition-colors">
+    <span class="absolute inset-0 flex items-center justify-center text-[#eaddc5] group-hover:text-white text-2xl tracking-widest uppercase transition-colors drop-shadow-md pointer-events-none">
         SIGN UP
     </span>
-
+    
 </button>
-
             </form>
 
            
