@@ -3,7 +3,7 @@
 
 <img  alt="CryptOfSecretsBanner" src="./documentation/documentation_assets/CryptOfSecretsBanner.png" />
 
-## 📖 Table of Contents
+##  Table of Contents
 
 1. [About the Project](#1-about-the-project)
    - 1.1 [Project Description](#11-project-description)
