@@ -1,3 +1,4 @@
+<?php require_once __DIR__ . '/../includes/config.php'; ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -17,18 +18,7 @@
     <style>
         body { font-family: 'Eczar', serif; }
 
-        .gooey-edge {
-            filter: url(#liquid-distort) drop-shadow(0 0 22px #7A0A0A);
-        }
-       
-        .ink-bleed {
-            position: absolute;
-            top: -220px;
-            bottom: -220px;
-            left: -220px;
-            right: 0;
-        }
-        .glow-wrap {
+               .glow-wrap {
             cursor: pointer;
         }
         .glow-wrap .glow-item {
@@ -44,17 +34,6 @@
             
         }
 
-        
-        #mainContent {
-            margin-left: 90px;
-            transition: margin-left 500ms ease-out;
-        }
-        aside:hover ~ #mainContent,
-        aside:focus-within ~ #mainContent {
-            margin-left: 400px;
-        }
-
-        
         .icon-swap {
             position: relative;
             display: inline-block;
@@ -104,147 +83,74 @@
 </filter>
 </svg>
 
-    <aside class="fixed top-0 left-0 h-screen w-[380px] -translate-x-[300px] hover:translate-x-0 focus-within:translate-x-0 transition-transform duration-500 ease-out z-50">
-        
-        <div class="ink-bleed bg-[#121110] gooey-edge"></div>
-
-        <div class="relative z-10 w-[280px] h-full flex flex-col pt-12 pl-10">
-            
-            <div class=" text-[#121110] px-4 py-2 text-center tracking-widest ">
-                <img src="../assets/images/icons/CryptLogo.png" alt="Profile" class="w-full h-full object-cover">
-            </div>
-            
-            <nav class="flex flex-col text-center gap-6 mt-6">
-                <a href="home.php" class="text-[#eaddc5] hover:text-[#72685F] text-3xl tracking-widest uppercase transition-colors">
-                    HOME
-                </a>
-                <a href="create-post.php" class="text-[#eaddc5] hover:text-[#72685F] text-3xl tracking-widest uppercase transition-colors">
-                    CREATE POST
-                </a>
-                <a href="profile.php" class="text-[#eaddc5] hover:text-[#72685F] text-3xl tracking-widest uppercase transition-colors">
-                    PROFILE
-                </a>
-                <a href="analytics.php" class="text-[#eaddc5] hover:text-[#72685F] text-3xl tracking-widest uppercase transition-colors">
-                    ANALYTICS
-                </a>
-                <a href="awards.php" class="text-[#eaddc5] hover:text-[#72685F]  text-3xl tracking-widest uppercase transition-colors">
-                    AWARDS
-                </a>
-            </nav>
-        </div>
-    </aside>
+    <?php include ROOT_PATH . 'components/sidenav.php'; ?>
 
    
-    <main id="mainContent" class="relative z-10 min-h-screen flex flex-col px-8 py-6">
-        
-       
-        <header class="flex justify-between items-center border-b border-gray-600 pb-3 mb-8">
-            
-           
-            <div class="flex items-center gap-5 text-[#FAEAC9] uppercase text-3xl tracking-wide">
+   <main id="mainContent" class="relative z-10 min-h-screen flex flex-col px-8 py-6">
+
+    <div class="w-full max-w-4xl mx-auto flex flex-col gap-3">
+
+        <header class="flex justify-between items-center border-b border-[#72685F] pb-3 mb-8">
+            <div class="flex items-center gap-4 text-[#FAEAC9] uppercase text-2xl tracking-wide">
                 <button class="underline underline-offset-4 hover:text-[#E11C25] transition-colors">FILTER</button>
                 <button class="underline underline-offset-4 hover:text-[#E11C25] transition-colors">SORT</button>
             </div>
-            
-           
-            <div class="flex items-center gap-5">
-                
+
+            <div class="flex items-center gap-4">
                 <a href="create-post.php"
-                   class="glow-wrap w-16 h-16 flex items-center justify-center text-[#121110] text-xl font-black">
+                   class="glow-wrap w-10 h-10 flex items-center justify-center text-[#121110] text-xl font-black">
                     <img src="../assets/images/icons/CryptPlusIcon.png" alt="add post" class="glow-item w-full h-full object-cover">
                 </a>
-              
-               <div class="glow-wrap flex flex-col items-center text-[16px]">
-                    <div class="glow-item w-12 h-12 rounded-full border border-red-900 overflow-hidden mb-1">
+                <div class="glow-wrap flex flex-col items-center text-[11px]">
+                    <div class="glow-item w-9 h-9 rounded-full border border-red-900 overflow-hidden mb-1">
                         <img src="../assets/images/icons/CryptProfileIcon.png" alt="Profile" class="w-full h-full object-cover">
                     </div>
+                    
                 </div>
             </div>
-            
         </header>
 
-        <div class="w-full max-w-4xl flex flex-col gap-3 mx-auto">
-            
-       
-            <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-full border border-red-900 overflow-hidden">
-                    <img src="../assets/images/icons/profileDummy.png" alt="" class="w-full h-full object-cover">
-                </div>
-                <span class="text-xl tracking-wider">STINKYSTAG69</span>
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-full border border-red-900 overflow-hidden">
+                <img src="../assets/images/icons/profileDummy.png" alt="" class="w-full h-full object-cover">
             </div>
-
-         
-            <h2 class="uppercase text-md tracking-widest">Title of Post</h2>
-
-           
-           <div class="relative w-full h-[400px] flex items-center justify-center">
-    
-    <div class="absolute inset-0 bg-[#121110] opacity-80 border-[4px] border-[#7A0A0A] rounded-xl rough-border pointer-events-none"></div>
-    
-    <div class="relative z-10 text-[#FAEAC9] text-3xl">
-        WORDS/IMAGE(post)
-    </div>
-    
-</div>
-            
-            <div class="flex gap-6 text-[#E11C25] font-['Fira_Sans'] font-medium text-m mt-2 transition-colors">
-                
-                <button class="glow-wrap flex flex-col items-center gap-1 transition-colors">
-                    <span class="icon-swap w-10 h-10 glow-item">
-                        <img class="icon-default" src="../assets/images/icons/CryptTrueIcon.png" alt="">
-                    </span>
-                    <span class="transition-colors">True</span>
-                </button>
-                
-                <button class="glow-wrap flex flex-col items-center gap-1 transition-colors">
-                    <span class="icon-swap w-10 h-10 glow-item">
-                        <img class="icon-default" src="../assets/images/icons/CryptFalseIcon.png" alt="">
-                    </span>
-                    <span class="transition-colors">False</span>
-                </button>
-                
-                <button class="glow-wrap flex flex-col items-center gap-1 transition-colors">
-                    <span class="icon-swap w-10 h-10 glow-item">
-                        <img class="icon-default" src="../assets/images/icons/CryptTarotIcon.png" alt="">
-                    </span>
-                    <span class="transition-colors">Award</span>
-                </button>
-                
-            </div>
-
+            <span class="text-xl tracking-wider">STINKYSTAG69</span>
         </div>
-        
 
-    </main><script>
-    const offsetElement = document.getElementById('js-offset');
-    const SPEED = 0.008; 
-    
-  
-    const WRAP = 2000; 
+        <h2 class="uppercase text-md tracking-widest">Title of Post</h2>
 
-    let lastUpdate = null;
-    let distance = 0;
+        <div class="relative w-full h-[400px] flex items-center justify-center">
+            <div class="absolute inset-0 bg-[#121110] opacity-80 border-[4px] border-[#7A0A0A] rounded-xl rough-border pointer-events-none"></div>
+            <div class="relative z-10 text-[#FAEAC9] text-3xl">
+                WORDS/IMAGE(post)
+            </div>
+        </div>
 
-    function updateGoo(currentTime) {
-        if (!lastUpdate) lastUpdate = currentTime;
-        const delta = currentTime - lastUpdate;
-        lastUpdate = currentTime;
+        <div class="flex gap-6 text-[#E11C25] font-['Fira_Sans'] font-medium text-m mt-2 transition-colors">
+            <button class="glow-wrap flex flex-col items-center gap-1 transition-colors">
+                <span class="icon-swap w-10 h-10 glow-item">
+                    <img class="icon-default" src="../assets/images/icons/CryptTrueIcon.png" alt="">
+                </span>
+                <span class="transition-colors">True</span>
+            </button>
+            <button class="glow-wrap flex flex-col items-center gap-1 transition-colors">
+                <span class="icon-swap w-10 h-10 glow-item">
+                    <img class="icon-default" src="../assets/images/icons/CryptFalseIcon.png" alt="">
+                </span>
+                <span class="transition-colors">False</span>
+            </button>
+            <button class="glow-wrap flex flex-col items-center gap-1 transition-colors">
+                <span class="icon-swap w-10 h-10 glow-item">
+                    <img class="icon-default" src="../assets/images/icons/CryptTarotIcon.png" alt="">
+                </span>
+                <span class="transition-colors">Award</span>
+            </button>
+        </div>
 
-       if (delta > 500) {
-            requestAnimationFrame(updateGoo);
-            return;
-        }
+    </div>
+</main>
 
-         distance = (distance + delta * SPEED) % WRAP;
-        
-        offsetElement.setAttribute('dx', distance);
-        
-       
-        requestAnimationFrame(updateGoo);
-    }
 
-    requestAnimationFrame(updateGoo);
-</script>
     <script type="module" src="/Crypt-of-Secrets/assets/js/ferrofluid.js"></script>
 
 </body>
