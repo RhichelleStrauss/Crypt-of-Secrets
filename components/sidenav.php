@@ -3,10 +3,12 @@
         margin-left: 90px;
         transition: margin-left 500ms ease-out;
     }
-    aside:hover ~ #mainContent,
-    aside:focus-within ~ #mainContent {
+
+    aside:hover~#mainContent,
+    aside:focus-within~#mainContent {
         margin-left: 400px;
     }
+
     #goo-container {
         position: absolute;
         top: 0;
@@ -16,12 +18,12 @@
         pointer-events: none;
         filter: drop-shadow(0 0 22px #7A0A0A);
     }
+
     #goo-container canvas {
         display: block;
         width: 100%;
         height: 100%;
     }
-
 </style>
 
 <aside class="fixed top-0 left-0 h-screen w-[380px] -translate-x-[300px] hover:translate-x-0 focus-within:translate-x-0 transition-transform duration-500 ease-out z-50">
@@ -50,28 +52,40 @@
             <a href="awards.php" class="text-[#eaddc5] hover:text-[#72685F] text-3xl tracking-widest uppercase transition-colors">
                 AWARDS
             </a>
+
+            <?php if (isLeader()): ?>
+                <a href="leader.php" class="text-[#7A0A0A] hover:text-[#E11C25] text-3xl tracking-widest uppercase transition-colors">
+                    THE LEADER
+                </a>
+            <?php endif; ?>
         </nav>
+      
     </div>
 </aside>
 
 <script type="module">
-import { Renderer, Program, Mesh, Triangle } from 'https://cdn.skypack.dev/ogl';
+    import {
+        Renderer,
+        Program,
+        Mesh,
+        Triangle
+    } from 'https://cdn.skypack.dev/ogl';
 
-const goo = {
-    baseEdge: 440,
-    displace: 250,
-    feature: 128,
-    speed: 0.10,
-    grit: 26,
-    gritScale: 7,
-    dustScale: 3.5,
-    dustDepth: 46,
-    dustBite: 0.85,
-    edgeSoftness: 1.5,
-    color: [0.071, 0.067, 0.063]
-};
+    const goo = {
+        baseEdge: 440,
+        displace: 250,
+        feature: 128,
+        speed: 0.10,
+        grit: 26,
+        gritScale: 7,
+        dustScale: 3.5,
+        dustDepth: 46,
+        dustBite: 0.85,
+        edgeSoftness: 1.5,
+        color: [0.071, 0.067, 0.063]
+    };
 
-const vertex = `
+    const vertex = `
 attribute vec2 position;
 attribute vec2 uv;
 varying vec2 vUv;
@@ -80,7 +94,7 @@ void main() {
   gl_Position = vec4(position, 0.0, 1.0);
 }`;
 
-const fragment = `
+    const fragment = `
 precision highp float;
 uniform vec2 iResolution;
 uniform float iTime;
@@ -156,41 +170,74 @@ float g = fbm(px / (uFeature * 1.37) + vec2(-t * 0.31, t * 0.09) + 19.7);
 }
 `;
 
-const container = document.getElementById('goo-container');
-const renderer = new Renderer({ dpr: window.devicePixelRatio || 1, alpha: true, antialias: true });
-const gl = renderer.gl;
-gl.clearColor(0, 0, 0, 0);
-container.appendChild(gl.canvas);
+    const container = document.getElementById('goo-container');
+    const renderer = new Renderer({
+        dpr: window.devicePixelRatio || 1,
+        alpha: true,
+        antialias: true
+    });
+    const gl = renderer.gl;
+    gl.clearColor(0, 0, 0, 0);
+    container.appendChild(gl.canvas);
 
-const uniforms = {
-    iResolution: { value: [1, 1] },
-    iTime: { value: 0 },
-    uBaseEdge: { value: goo.baseEdge },
-    uDisplace: { value: goo.displace },
-    uFeature: { value: goo.feature },
-    uGrit: { value: goo.grit },
-    uGritScale: { value: goo.gritScale },
-    uSoft: { value: goo.edgeSoftness },
-    uColor: { value: goo.color },
-    uDustScale: { value: goo.dustScale },
+    const uniforms = {
+        iResolution: {
+            value: [1, 1]
+        },
+        iTime: {
+            value: 0
+        },
+        uBaseEdge: {
+            value: goo.baseEdge
+        },
+        uDisplace: {
+            value: goo.displace
+        },
+        uFeature: {
+            value: goo.feature
+        },
+        uGrit: {
+            value: goo.grit
+        },
+        uGritScale: {
+            value: goo.gritScale
+        },
+        uSoft: {
+            value: goo.edgeSoftness
+        },
+        uColor: {
+            value: goo.color
+        },
+        uDustScale: {
+            value: goo.dustScale
+        },
 
-};
+    };
 
-const program = new Program(gl, { vertex, fragment, uniforms });
-const mesh = new Mesh(gl, { geometry: new Triangle(gl), program });
+    const program = new Program(gl, {
+        vertex,
+        fragment,
+        uniforms
+    });
+    const mesh = new Mesh(gl, {
+        geometry: new Triangle(gl),
+        program
+    });
 
-function resize() {
-    const rect = container.getBoundingClientRect();
-    if (rect.width === 0 || rect.height === 0) return;
-    renderer.setSize(rect.width, rect.height);
-    uniforms.iResolution.value = [rect.width, rect.height];
-}
-window.addEventListener('resize', resize);
-resize();
+    function resize() {
+        const rect = container.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) return;
+        renderer.setSize(rect.width, rect.height);
+        uniforms.iResolution.value = [rect.width, rect.height];
+    }
+    window.addEventListener('resize', resize);
+    resize();
 
-requestAnimationFrame(function loop(t) {
-    requestAnimationFrame(loop);
-    uniforms.iTime.value = t * 0.001 * goo.speed;
-    renderer.render({ scene: mesh });
-});
+    requestAnimationFrame(function loop(t) {
+        requestAnimationFrame(loop);
+        uniforms.iTime.value = t * 0.001 * goo.speed;
+        renderer.render({
+            scene: mesh
+        });
+    });
 </script>
