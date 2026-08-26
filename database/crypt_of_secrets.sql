@@ -23,9 +23,10 @@ CREATE TABLE tarot_card_buffs (
     tarot_id      INT AUTO_INCREMENT PRIMARY KEY,
     tarot_name    VARCHAR(100) NOT NULL,
     icon_filename VARCHAR(100) NOT NULL,
+    back_filename VARCHAR(100) NULL,
     effect_type   ENUM(
         'score_multiplier','vote_weight','hide_false_votes','pin_position',
-        'reset_false_votes','piece_drop_rate','duration_extend','reset_ratio',
+        'reset_false_votes','piece_drop_rate','voter_reward','reset_ratio',
         'vote_trickle','feed_priority'
     ) NOT NULL,
     effect_value  DECIMAL(5,2) NULL,
@@ -197,15 +198,15 @@ INSERT INTO animal_avatars (animal_name, filename, min_trust) VALUES
 
 -- the values of the buffs, names of the files, the value, duration etc --
 INSERT INTO tarot_card_buffs
-    (tarot_name, icon_filename, effect_type, effect_value, effect_text, buff_duration, rarity)
+    (tarot_name, icon_filename, back_filename, effect_type, effect_value, effect_text, buff_duration, rarity)
 VALUES
-    ("The Confessor's Mark", 'TempTarot_TheConfessorsMark.png', 'score_multiplier',  1.50, 'Boosts post popularity 1.5x',        1440, 1),
-    ('Whispered Truth',      'TempTarot_WhisperedTruth.png',    'vote_weight',       2.00, 'True votes count double',             720, 2),
-    ('Veil of Silence',      'TempTarot_VeilOfSilence.png',     'hide_false_votes',  NULL, 'Hides false vote count',             1440, 2),
-    ('Rite of Remaining',    'TempTarot_RiteOfRemaining.png',   'pin_position',      NULL, 'Holds the post at the top of the feed', 1440, 1),
-    ('Ashes to Ashes',       'TempTarot_AshesToAshes.png',      'reset_false_votes', NULL, 'Resets accumulated false votes',     NULL, 3),
-    ('The Unblinking Eye',   'TempTarot_TheUnblinkingEye.png',  'piece_drop_rate',   2.00, 'Doubles tarot piece drop rate',       360, 2),
-    ('The Long Vigil',       'TempTarot_TheLongVigil.png',      'duration_extend',  48.00, 'Extends post feature time by 48hrs', 2880, 2),
-    ('Second Chance',        'TempTarot_SecondChance.png',      'reset_ratio',       NULL, 'Resets vote ratio to 0-0',           NULL, 3),
-    ("Fortune's Favour",     'TempTarot_FortunesFavour.png',    'vote_trickle',      1.00, '+1 true vote per hour passively',     720, 2),
-    ('The Hollow Choir',     'TempTarot_TheHollowChoir.png',    'feed_priority',     NULL, 'Boosts feed priority without votes', 1440, 3);
+    ("The Confessor's Mark", 'TempTarot_TheConfessorsMark.png', 'TarotBack_TheConfessorsMark.png', 'score_multiplier',  1.50, 'Boosts post popularity 1.5x',        1440, 1),
+    ('Whispered Truth',      'TempTarot_WhisperedTruth.png',    'TarotBack_WhisperedTruth.png',    'vote_weight',       2.00, 'True votes count double',             720, 2),
+    ('Veil of Silence',      'TempTarot_VeilOfSilence.png',     'TarotBack_VeilOfSilence.png',     'hide_false_votes',  NULL, 'Hides false vote count',             1440, 2),
+    ('Rite of Remaining',    'TempTarot_RiteOfRemaining.png',   'TarotBack_RiteOfRemaining.png',   'pin_position',      NULL, 'The crypt does not bury what it has chosen to remember', 1440, 1),
+    ('Ashes to Ashes',       'TempTarot_AshesToAshes.png',      'TarotBack_AshesToAshes.png',      'reset_false_votes', NULL, 'Resets accumulated false votes',     NULL, 3),
+    ('The Unblinking Eye',   'TempTarot_TheUnblinkingEye.png',  'TarotBack_TheUnblinkingEye.png',  'piece_drop_rate',   2.00, 'Doubles tarot piece drop rate',       360, 2),
+    ('The Toll',             'TempTarot_TheToll.png',           'TarotBack_TheToll.png',           'voter_reward',      1.00, 'None pass judgement here without being paid', 1440, 2),
+    ('Second Chance',        'TempTarot_SecondChance.png',      'TarotBack_SecondChance.png',      'reset_ratio',       NULL, 'Resets vote ratio to 0-0',           NULL, 3),
+    ("Fortune's Favour",     'TempTarot_FortunesFavour.png',    'TarotBack_FortunesFavour.png',    'vote_trickle',      1.00, '+1 true vote per hour passively',     720, 2),
+    ('The Hollow Choir',     'TempTarot_TheHollowChoir.png',    'TarotBack_TheHollowChoir.png',    'feed_priority',     NULL, 'Boosts feed priority without votes', 1440, 3);
