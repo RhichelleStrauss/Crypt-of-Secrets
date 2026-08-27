@@ -52,12 +52,6 @@
             <a href="awards.php" class="text-[#eaddc5] hover:text-[#72685F] text-3xl tracking-widest uppercase transition-colors">
                 AWARDS
             </a>
-
-            <?php if (isLeader()): ?>
-                <a href="leader.php" class="text-[#7A0A0A] hover:text-[#E11C25] text-3xl tracking-widest uppercase transition-colors">
-                    THE LEADER
-                </a>
-            <?php endif; ?>
         </nav>
         <?php if ($user['is_anonymous'] ?? false): ?>
             <a href="claim-profile.php" class="text-[#7A0A0A] hover:text-[#E11C25] text-3xl tracking-widest uppercase transition-colors">

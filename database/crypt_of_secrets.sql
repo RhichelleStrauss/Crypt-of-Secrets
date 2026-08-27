@@ -153,6 +153,19 @@ CREATE TABLE post_awards (
 ) ENGINE=InnoDB;
 
 
+
+CREATE TABLE post_views (
+    view_id   INT AUTO_INCREMENT PRIMARY KEY,
+    post_id   INT      NOT NULL,
+    viewer_id INT      NOT NULL,
+    viewed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (post_id)   REFERENCES posts(post_id) ON DELETE CASCADE,
+    FOREIGN KEY (viewer_id) REFERENCES users(user_id) ON DELETE CASCADE,
+    UNIQUE KEY uniq_view (post_id, viewer_id)
+) ENGINE=InnoDB;
+
+
 -- if you get enough trust index you can submit your own animal pfp to be reviewed --
 CREATE TABLE avatar_submissions (
     submission_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -169,11 +182,14 @@ CREATE TABLE avatar_submissions (
     INDEX idx_status (status)
 ) ENGINE=InnoDB;
 
--- notifications potentially for when posts are approced --
+
 CREATE TABLE notifications (
     notification_id INT AUTO_INCREMENT PRIMARY KEY,
     user_id    INT NOT NULL,
-    type       ENUM('post_approved','post_rejected','award_received') NOT NULL,
+    type       ENUM(
+        'post_approved','post_rejected','award_received',
+        'fragment_gained','vote_received','trust_threshold'
+    ) NOT NULL,
     post_id    INT NULL,
     is_read    BOOLEAN NOT NULL DEFAULT FALSE,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

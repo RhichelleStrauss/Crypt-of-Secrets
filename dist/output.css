@@ -212,6 +212,9 @@
   .pointer-events-none {
     pointer-events: none;
   }
+  .visible {
+    visibility: visible;
+  }
   .sr-only {
     position: absolute;
     width: 1px;
@@ -403,6 +406,9 @@
   .h-64 {
     height: calc(var(--spacing) * 64);
   }
+  .h-\[18px\] {
+    height: 18px;
+  }
   .h-\[50vh\] {
     height: 50vh;
   }
@@ -495,6 +501,9 @@
   }
   .max-w-xl {
     max-width: var(--container-xl);
+  }
+  .min-w-\[18px\] {
+    min-width: 18px;
   }
   .flex-1 {
     flex: 1;
@@ -742,6 +751,9 @@
   .bg-\[\#323236\]\/80 {
     background-color: color-mix(in oklab, #323236 80%, transparent);
   }
+  .bg-\[\#E11C25\] {
+    background-color: #E11C25;
+  }
   .bg-\[\#e4d5b7\]\/95 {
     background-color: color-mix(in oklab, #e4d5b7 95%, transparent);
   }
@@ -792,6 +804,9 @@
   }
   .p-10 {
     padding: calc(var(--spacing) * 10);
+  }
+  .px-1 {
+    padding-inline: var(--spacing);
   }
   .px-3 {
     padding-inline: calc(var(--spacing) * 3);
@@ -921,6 +936,10 @@
   }
   .text-\[16px\] {
     font-size: 16px;
+  }
+  .leading-none {
+    --tw-leading: 1;
+    line-height: 1;
   }
   .leading-relaxed {
     --tw-leading: var(--leading-relaxed);
