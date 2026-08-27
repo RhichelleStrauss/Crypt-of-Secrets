@@ -21,6 +21,7 @@ $stmt->execute(['pid' => $postId]);
 
 if ($stmt->fetch()) {
  
+   
     $stmt = $pdo->prepare(
         'UPDATE award_collection
          SET quantity = quantity - 1
@@ -54,6 +55,7 @@ if ($stmt->fetch()) {
         }
 
      
+       
         $author = $pdo->prepare('SELECT author_id FROM posts WHERE post_id = :pid');
         $author->execute(['pid' => $postId]);
         $authorId = $author->fetchColumn();

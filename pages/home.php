@@ -7,8 +7,8 @@ requireLogin();
 
 $user = currentUser($pdo);
 
-const PIECE_DROP_CHANCE = 50;
-const TRUST_PER_TRUE_VOTE = 5; 
+const PIECE_DROP_CHANCE = 100; 
+const TRUST_PER_TRUE_VOTE = 50;
 
 
 function tryAssembleCard(PDO $pdo, int $userId, int $tarotId): bool {
@@ -54,6 +54,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['vote_post_id'])) {
         ]);
 
       
+        
         $isNewVote = $stmt->rowCount() === 1;
 
         if ($isTrue) {
@@ -85,6 +86,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['vote_post_id'])) {
         }
     }
 
+   
     $back = 'home.php?sort=' . urlencode($_POST['sort'] ?? 'new')
           . '&filter=' . urlencode($_POST['filter'] ?? 'all');
     header('Location: ' . $back);
@@ -189,6 +191,7 @@ function postAuthorName(array $post): string {
 
 function postAuthorAvatar(array $post): string {
 
+   
     if ($post['posted_anonymously'] || $post['is_anonymous']) {
         return BASE_URL . 'assets/images/icons/profileDummy.png';
     }

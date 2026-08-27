@@ -8,6 +8,7 @@ requireLogin();
 $user = currentUser($pdo);
 if (!$user) {
 
+ 
     logoutUser();
     header('Location: login.php');
     exit;
@@ -57,6 +58,7 @@ if ($activeTab === 'true') {
     $voteFilter = 'HAVING total_votes > 0 AND true_count = 0';
 }
 
+
 $stmt = $pdo->prepare(
     "SELECT p.post_id, p.content, p.created_at,
             COUNT(DISTINCT tv.vote_id) AS total_votes,
@@ -73,6 +75,7 @@ $stmt = $pdo->prepare(
 );
 $stmt->execute(['id' => $user['user_id']]);
 $posts = $stmt->fetchAll();
+
 
 $stmt = $pdo->prepare(
     'SELECT t.tarot_id, t.tarot_name, t.icon_filename, ac.quantity

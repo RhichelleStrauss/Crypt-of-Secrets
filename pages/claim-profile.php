@@ -52,6 +52,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $eligible) {
         $adjective = $_POST['adjective'] ?? '';
 
      
+        
         $stmt = $pdo->prepare(
             'SELECT animal_name FROM animal_avatars
              WHERE avatar_id = :id AND min_trust <= :trust'
