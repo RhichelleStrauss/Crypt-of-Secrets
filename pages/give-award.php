@@ -15,15 +15,12 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !checkCsrf($_POST['csrf'] ?? null))
 $postId  = (int)($_POST['post_id'] ?? 0);
 $tarotId = (int)($_POST['tarot_id'] ?? 0);
 
-// Confirm the post actually exists and is approved — no awarding drafts
-// or posts still awaiting the leader.
+
 $stmt = $pdo->prepare('SELECT post_id FROM posts WHERE post_id = :pid AND status = "approved"');
 $stmt->execute(['pid' => $postId]);
 
 if ($stmt->fetch()) {
-    // Spend one copy — the WHERE quantity > 0 makes this atomic and
-    // race-safe. If two requests fire at once, only one can succeed
-    // per copy actually held.
+   
     $stmt = $pdo->prepare(
         'UPDATE award_collection
          SET quantity = quantity - 1
@@ -42,8 +39,7 @@ if ($stmt->fetch()) {
         $cardData = $card->fetch();
 
         if ($cardData['buff_duration'] === null) {
-            // Instant-effect cards still need SOME expiry so pin_position
-            // etc. don't linger forever if applied here by mistake later.
+          
             $pdo->prepare(
                 'UPDATE posts SET active_buff_id = :tid, buff_expires_at = NOW()
                  WHERE post_id = :pid'
@@ -57,7 +53,7 @@ if ($stmt->fetch()) {
             )->execute(['tid' => $tarotId, 'dur' => $cardData['buff_duration'], 'pid' => $postId]);
         }
 
-        // Notify the post's author.
+       
         $author = $pdo->prepare('SELECT author_id FROM posts WHERE post_id = :pid');
         $author->execute(['pid' => $postId]);
         $authorId = $author->fetchColumn();
