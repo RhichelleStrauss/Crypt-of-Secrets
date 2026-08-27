@@ -258,6 +258,18 @@ function postAuthorAvatar(array $post): string {
         }
         .menu > summary::-webkit-details-marker { display: none; }
         .menu[open] > summary { color: #E11C25; }
+
+        .dropdown-link {
+            position: relative;
+        }
+        .dropdown-link:not(:last-child)::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 4%;
+            width: 86%;
+            border-bottom: 1px solid rgba(228, 213, 183, 0.25);
+        }
     </style>
 </head>
 
@@ -278,31 +290,37 @@ function postAuthorAvatar(array $post): string {
 
         <div class="w-full max-w-4xl mx-auto flex flex-col gap-3">
 
-            <header class="flex justify-between items-center border-b border-[#FAEAC9] pb-3 mb-8">
+           <header class="flex justify-between items-center border-b border-[#FAEAC9] pb-3 mb-8">
 
                 <div class="flex items-center gap-5 text-[#FAEAC9] uppercase text-2xl tracking-wide">
 
-                    <details class="menu relative">
+                    <details class="menu relative" id="filterMenu">
                         <summary class="underline underline-offset-4 hover:text-[#E11C25] transition-colors">FILTER</summary>
-                        <div class="absolute left-0 top-full mt-2 z-40 w-60 bg-[#1c1a18] border border-[#7A0A0A] rounded-lg py-2 shadow-xl">
-                            <?php foreach ($filterOptions as $key => $opt): ?>
-                            <a href="<?= viewUrl($sort, $key) ?>"
-                               class="block px-4 py-2 font-['Fira_Sans'] text-sm normal-case tracking-normal transition-colors <?= $filter === $key ? 'text-[#E11C25]' : 'text-[#e4d5b7] hover:text-[#FAEAC9] hover:bg-[#7A0A0A]/20' ?>">
-                                <?= htmlspecialchars($opt['label']) ?>
-                            </a>
-                            <?php endforeach; ?>
+                        <div class="absolute left-0 top-full mt-2 z-40 w-60">
+                            <div class="absolute inset-0 bg-[#4A4A4A]/60 backdrop-blur-sm border-[3px] border-[#7A0A0A] rounded-lg rough-border pointer-events-none"></div>
+                            <div class="relative z-10 py-2">
+                                <?php foreach ($filterOptions as $key => $opt): ?>
+                                <a href="<?= viewUrl($sort, $key) ?>"
+                                   class="dropdown-link block px-4 py-2 font-['Fira_Sans'] text-sm normal-case tracking-normal transition-colors <?= $filter === $key ? 'text-[#E11C25] font-bold' : 'text-[#e4d5b7] hover:text-[#E11C25]' ?>">
+                                    <?= htmlspecialchars($opt['label']) ?>
+                                </a>
+                                <?php endforeach; ?>
+                            </div>
                         </div>
                     </details>
 
-                    <details class="menu relative">
+                    <details class="menu relative" id="sortMenu">
                         <summary class="underline underline-offset-4 hover:text-[#E11C25] transition-colors">SORT</summary>
-                        <div class="absolute left-0 top-full mt-2 z-40 w-60 bg-[#1c1a18] border border-[#7A0A0A] rounded-lg py-2 shadow-xl">
-                            <?php foreach ($sortOptions as $key => $opt): ?>
-                            <a href="<?= viewUrl($key, $filter) ?>"
-                               class="block px-4 py-2 font-['Fira_Sans'] text-sm normal-case tracking-normal transition-colors <?= $sort === $key ? 'text-[#E11C25]' : 'text-[#e4d5b7] hover:text-[#FAEAC9] hover:bg-[#7A0A0A]/20' ?>">
-                                <?= htmlspecialchars($opt['label']) ?>
-                            </a>
-                            <?php endforeach; ?>
+                        <div class="absolute left-0 top-full mt-2 z-40 w-60">
+                            <div class="absolute inset-0 bg-[#4A4A4A]/60 backdrop-blur-sm border-[3px] border-[#7A0A0A] rounded-lg rough-border pointer-events-none"></div>
+                            <div class="relative z-10 py-2">
+                                <?php foreach ($sortOptions as $key => $opt): ?>
+                                <a href="<?= viewUrl($key, $filter) ?>"
+                                   class="dropdown-link block px-4 py-2 font-['Fira_Sans'] text-sm normal-case tracking-normal transition-colors <?= $sort === $key ? 'text-[#E11C25] font-bold' : 'text-[#e4d5b7] hover:text-[#E11C25]' ?>">
+                                    <?= htmlspecialchars($opt['label']) ?>
+                                </a>
+                                <?php endforeach; ?>
+                            </div>
                         </div>
                     </details>
 
@@ -481,7 +499,36 @@ function postAuthorAvatar(array $post): string {
         </div>
     </main>
 
+    
+
     <script type="module" src="<?= BASE_URL ?>assets/js/ferrofluid.js"></script>
+
+    <script>
+        (function () {
+            var filterMenu = document.getElementById('filterMenu');
+            var sortMenu = document.getElementById('sortMenu');
+            var navMenus = [filterMenu, sortMenu].filter(Boolean);
+            if (!navMenus.length) return;
+
+            navMenus.forEach(function (menu) {
+                menu.addEventListener('toggle', function () {
+                    if (menu.open) {
+                        navMenus.forEach(function (other) {
+                            if (other !== menu) other.removeAttribute('open');
+                        });
+                    }
+                });
+            });
+
+            document.addEventListener('click', function (e) {
+                navMenus.forEach(function (menu) {
+                    if (menu.open && !menu.contains(e.target)) {
+                        menu.removeAttribute('open');
+                    }
+                });
+            });
+        })();
+    </script>
 
 </body>
 </html>
