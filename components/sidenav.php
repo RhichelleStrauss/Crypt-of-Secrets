@@ -59,7 +59,11 @@
                 </a>
             <?php endif; ?>
         </nav>
-      
+        <?php if ($user['is_anonymous'] ?? false): ?>
+            <a href="claim-profile.php" class="text-[#7A0A0A] hover:text-[#E11C25] text-3xl tracking-widest uppercase transition-colors">
+                STEP FORWARD
+            </a>
+        <?php endif; ?>
     </div>
 </aside>
 
