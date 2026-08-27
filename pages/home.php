@@ -2,38 +2,14 @@
 require_once __DIR__ . '/../includes/config.php';
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/../includes/tarot.php';
 
 requireLogin();
 
 $user = currentUser($pdo);
 
-const PIECE_DROP_CHANCE = 100; 
+const PIECE_DROP_CHANCE = 100;
 const TRUST_PER_TRUE_VOTE = 50;
-
-
-function tryAssembleCard(PDO $pdo, int $userId, int $tarotId): bool {
-    $stmt = $pdo->prepare(
-        'SELECT COUNT(DISTINCT piece_number) FROM user_tarot_pieces
-         WHERE user_id = :uid AND tarot_id = :tid'
-    );
-    $stmt->execute(['uid' => $userId, 'tid' => $tarotId]);
-
-    if ((int)$stmt->fetchColumn() < 4) {
-        return false;
-    }
-
-    $pdo->prepare(
-        'DELETE FROM user_tarot_pieces WHERE user_id = :uid AND tarot_id = :tid'
-    )->execute(['uid' => $userId, 'tid' => $tarotId]);
-
-    $pdo->prepare(
-        'INSERT INTO award_collection (user_id, tarot_id, quantity)
-         VALUES (:uid, :tid, 1)
-         ON DUPLICATE KEY UPDATE quantity = quantity + 1'
-    )->execute(['uid' => $userId, 'tid' => $tarotId]);
-
-    return true;
-}
 
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['vote_post_id'])) {
@@ -66,22 +42,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['vote_post_id'])) {
             )->execute(['amount' => TRUST_PER_TRUE_VOTE, 'post_id' => $postId]);
         }
 
-        if ($isNewVote && random_int(1, 100) <= PIECE_DROP_CHANCE) {
-            $tarotId = $pdo->query('SELECT tarot_id FROM tarot_card_buffs ORDER BY RAND() LIMIT 1')->fetchColumn();
+        if ($isNewVote) {
+            $assembled    = [];
+            $loosePieces  = 0;
 
-            $pdo->prepare(
-                'INSERT INTO user_tarot_pieces (user_id, tarot_id, piece_number)
-                 VALUES (:uid, :tid, :piece)'
-            )->execute([
-                'uid'   => $user['user_id'],
-                'tid'   => $tarotId,
-                'piece' => random_int(1, 4),
-            ]);
+            if (random_int(1, 100) <= PIECE_DROP_CHANCE) {
+                $result = grantFragment($pdo, $user['user_id']);
+                $result !== null ? $assembled[] = $result : $loosePieces++;
+            }
 
-            if (tryAssembleCard($pdo, $user['user_id'], $tarotId)) {
-                $_SESSION['flash_assembled'] = $tarotId;
-            } else {
-                $_SESSION['flash_piece'] = true;
+     
+            $tollStmt = $pdo->prepare(
+                "SELECT 1 FROM posts p
+                 JOIN tarot_card_buffs t ON t.tarot_id = p.active_buff_id
+                 WHERE p.post_id = :post_id
+                   AND p.buff_expires_at > NOW()
+                   AND t.effect_type = 'voter_reward'"
+            );
+            $tollStmt->execute(['post_id' => $postId]);
+
+            if ($tollStmt->fetchColumn()) {
+                $result = grantFragment($pdo, $user['user_id']);
+                $result !== null ? $assembled[] = $result : $loosePieces++;
+            }
+
+            if ($assembled) {
+                $_SESSION['flash_assembled'] = $assembled;
+            }
+            if ($loosePieces > 0) {
+                $_SESSION['flash_piece_count'] = $loosePieces;
             }
         }
     }
@@ -94,17 +83,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['vote_post_id'])) {
 }
 
 
-$flashAssembledId = $_SESSION['flash_assembled'] ?? null;
-$flashPiece       = $_SESSION['flash_piece'] ?? false;
-$flashAwarded     = $_SESSION['flash_awarded'] ?? null;
-$flashAwardError  = $_SESSION['flash_award_error'] ?? null;
-unset($_SESSION['flash_assembled'], $_SESSION['flash_piece'], $_SESSION['flash_awarded'], $_SESSION['flash_award_error']);
+$flashAssembledIds = $_SESSION['flash_assembled'] ?? [];
+$flashPieceCount   = $_SESSION['flash_piece_count'] ?? 0;
+$flashAwarded      = $_SESSION['flash_awarded'] ?? null;
+$flashAwardError   = $_SESSION['flash_award_error'] ?? null;
+unset($_SESSION['flash_assembled'], $_SESSION['flash_piece_count'], $_SESSION['flash_awarded'], $_SESSION['flash_award_error']);
 
-$assembledCardName = null;
-if ($flashAssembledId) {
-    $stmt = $pdo->prepare('SELECT tarot_name FROM tarot_card_buffs WHERE tarot_id = :id');
-    $stmt->execute(['id' => $flashAssembledId]);
-    $assembledCardName = $stmt->fetchColumn();
+$assembledCardNames = [];
+if ($flashAssembledIds) {
+    $placeholders = implode(',', array_fill(0, count($flashAssembledIds), '?'));
+    $stmt = $pdo->prepare("SELECT tarot_name FROM tarot_card_buffs WHERE tarot_id IN ($placeholders)");
+    $stmt->execute($flashAssembledIds);
+    $assembledCardNames = $stmt->fetchAll(PDO::FETCH_COLUMN);
 }
 
 $submitted = isset($_GET['submitted']);
@@ -143,6 +133,7 @@ $stmt = $pdo->prepare(
         SUM(CASE WHEN tv.is_true = 1 THEN 1 ELSE 0 END) AS true_count,
         SUM(CASE WHEN tv.is_true = 1 THEN 1 ELSE -1 END) AS score,
         (SELECT COUNT(*) FROM post_awards pa WHERE pa.post_id = p.post_id) AS award_count,
+        (SELECT COUNT(*) FROM post_views pv WHERE pv.post_id = p.post_id) AS view_count,
         MAX(CASE WHEN tv.voter_id = :uid THEN tv.is_true END) AS my_vote
      FROM posts p
      JOIN users u ON u.user_id = p.author_id
@@ -158,16 +149,26 @@ $stmt = $pdo->prepare(
 $stmt->execute(['uid' => $user['user_id']]);
 $posts = $stmt->fetchAll();
 
+// Record a view for every post visible in this feed load. uniq_view (post_id,
+// viewer_id) makes this idempotent — scrolling past the same post again never
+// inflates its count.
+if ($posts) {
+    $viewRows   = [];
+    $viewParams = [];
+    foreach ($posts as $p) {
+        $viewRows[]   = '(?, ?)';
+        $viewParams[] = $p['post_id'];
+        $viewParams[] = $user['user_id'];
+    }
+    $pdo->prepare(
+        'INSERT IGNORE INTO post_views (post_id, viewer_id) VALUES ' . implode(', ', $viewRows)
+    )->execute($viewParams);
+}
 
-$stmt = $pdo->prepare(
-    'SELECT t.tarot_id, t.tarot_name, ac.quantity
-     FROM award_collection ac
-     JOIN tarot_card_buffs t ON t.tarot_id = ac.tarot_id
-     WHERE ac.user_id = :uid AND ac.quantity > 0
-     ORDER BY t.tarot_name'
-);
+
+$stmt = $pdo->prepare('SELECT 1 FROM user_tarot_pieces WHERE user_id = :uid LIMIT 1');
 $stmt->execute(['uid' => $user['user_id']]);
-$heldCards = $stmt->fetchAll();
+$hasFragmentsToGive = (bool)$stmt->fetchColumn();
 
 function viewUrl(string $sort, string $filter): string {
     return 'home.php?sort=' . urlencode($sort) . '&filter=' . urlencode($filter);
@@ -327,6 +328,13 @@ function postAuthorAvatar(array $post): string {
                 </div>
 
                 <div class="flex items-center gap-5">
+                    <?php if (isLeader()): ?>
+                    <a href="leader.php" class="glow-wrap flex flex-col items-center text-[16px]">
+                        <div class="glow-item w-12 h-12 rounded-full border border-red-900 overflow-hidden mb-1">
+                            <img src="<?= BASE_URL ?>assets/images/icons/LeaderDashIcon.png" alt="Leader dashboard" class="w-full h-full object-cover">
+                        </div>
+                    </a>
+                    <?php endif; ?>
                     <a href="create-post.php"
                        class="glow-wrap w-16 h-16 flex items-center justify-center text-[#121110] text-xl font-black">
                         <img src="<?= BASE_URL ?>assets/images/icons/CryptPlusIcon.png" alt="add post" class="glow-item w-full h-full object-cover">
@@ -339,22 +347,24 @@ function postAuthorAvatar(array $post): string {
                 </div>
             </header>
 
-            <?php if ($assembledCardName): ?>
+            <?php if ($assembledCardNames): ?>
             <div class="border border-[#7A0A0A] bg-[#7A0A0A]/20 px-4 py-3 mb-2">
                 <p class="font-['Fira_Sans'] text-sm text-[#FAEAC9]">
-                    A card completes itself in your hand — <span class="text-[#E11C25]"><?= htmlspecialchars($assembledCardName) ?></span> is yours.
+                    A card completes itself in your hand — <span class="text-[#E11C25]"><?= htmlspecialchars(implode(', ', $assembledCardNames)) ?></span> <?= count($assembledCardNames) > 1 ? 'are' : 'is' ?> yours.
                 </p>
             </div>
-            <?php elseif ($flashPiece): ?>
+            <?php elseif ($flashPieceCount > 0): ?>
             <div class="border border-[#7A0A0A] bg-[#7A0A0A]/10 px-4 py-3 mb-2">
-                <p class="font-['Fira_Sans'] text-sm text-[#FAEAC9]">A fragment falls into your keeping.</p>
+                <p class="font-['Fira_Sans'] text-sm text-[#FAEAC9]">
+                    <?= $flashPieceCount > 1 ? "Fragments ($flashPieceCount) fall" : 'A fragment falls' ?> into your keeping.
+                </p>
             </div>
             <?php endif; ?>
 
             <?php if ($flashAwarded): ?>
             <div class="border border-[#7A0A0A] bg-[#7A0A0A]/20 px-4 py-3 mb-2">
                 <p class="font-['Fira_Sans'] text-sm text-[#FAEAC9]">
-                    You bestow <span class="text-[#E11C25]"><?= htmlspecialchars($flashAwarded) ?></span> upon the confession.
+                    A fragment of <span class="text-[#E11C25]"><?= htmlspecialchars($flashAwarded) ?></span> slips into their keeping.
                 </p>
             </div>
             <?php elseif ($flashAwardError): ?>
@@ -450,33 +460,26 @@ function postAuthorAvatar(array $post): string {
                             </button>
                         </form>
 
-                        <?php if (!empty($heldCards)): ?>
-                        <details class="menu relative">
-                            <summary class="glow-wrap flex flex-col items-center gap-1 transition-colors list-none">
+                        <?php
+                      
+                        $isOwnPost = (int)$post['author_user_id'] === (int)$user['user_id'];
+                        $canAward  = $hasFragmentsToGive && !$isOwnPost;
+                        ?>
+                        <?php if ($canAward): ?>
+                        <form method="POST" action="give-award.php">
+                            <input type="hidden" name="csrf" value="<?= htmlspecialchars(csrfToken()) ?>">
+                            <input type="hidden" name="post_id" value="<?= $post['post_id'] ?>">
+                            <input type="hidden" name="sort" value="<?= htmlspecialchars($sort) ?>">
+                            <input type="hidden" name="filter" value="<?= htmlspecialchars($filter) ?>">
+                            <button type="submit" class="glow-wrap flex flex-col items-center gap-1 transition-colors">
                                 <span class="icon-swap w-10 h-10 glow-item">
                                     <img src="<?= BASE_URL ?>assets/images/icons/CryptTarotIcon.png" alt="">
                                 </span>
                                 <span class="transition-colors">Award</span>
-                            </summary>
-                            <div class="absolute left-0 top-full mt-2 z-40 w-64 bg-[#1c1a18] border border-[#7A0A0A] rounded-lg py-2 shadow-xl">
-                                <?php foreach ($heldCards as $held): ?>
-                                <form method="POST" action="give-award.php">
-                                    <input type="hidden" name="csrf" value="<?= htmlspecialchars(csrfToken()) ?>">
-                                    <input type="hidden" name="post_id" value="<?= $post['post_id'] ?>">
-                                    <input type="hidden" name="tarot_id" value="<?= $held['tarot_id'] ?>">
-                                    <input type="hidden" name="sort" value="<?= htmlspecialchars($sort) ?>">
-                                    <input type="hidden" name="filter" value="<?= htmlspecialchars($filter) ?>">
-                                    <button type="submit"
-                                            class="w-full text-left px-4 py-2 font-['Fira_Sans'] text-sm text-[#e4d5b7] hover:text-[#FAEAC9] hover:bg-[#7A0A0A]/20 transition-colors flex justify-between items-center">
-                                        <span><?= htmlspecialchars($held['tarot_name']) ?></span>
-                                        <span class="text-[#9b9186] text-xs">×<?= (int)$held['quantity'] ?></span>
-                                    </button>
-                                </form>
-                                <?php endforeach; ?>
-                            </div>
-                        </details>
+                            </button>
+                        </form>
                         <?php else: ?>
-                        <button type="button" disabled class="flex flex-col items-center gap-1 opacity-30 cursor-not-allowed">
+                        <button type="button" disabled title="<?= $isOwnPost ? "You can't award your own post" : 'No fragments to give' ?>" class="flex flex-col items-center gap-1 opacity-30 cursor-not-allowed">
                             <span class="icon-swap w-10 h-10">
                                 <img src="<?= BASE_URL ?>assets/images/icons/CryptTarotIcon.png" alt="">
                             </span>
