@@ -8,98 +8,9 @@ requireLogin();
 
 $user = currentUser($pdo);
 
-const PIECE_DROP_CHANCE = 100;
-const TRUST_PER_TRUE_VOTE = 50;
-
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['vote_post_id'])) {
-    if (checkCsrf($_POST['csrf'] ?? null)) {
-        $postId = (int)$_POST['vote_post_id'];
-        $isTrue = $_POST['vote_value'] === 'true' ? 1 : 0;
-
-        $stmt = $pdo->prepare(
-            'INSERT INTO truth_voting (post_id, voter_id, is_true)
-             VALUES (:post_id, :voter_id, :is_true)
-             ON DUPLICATE KEY UPDATE is_true = :is_true2'
-        );
-        $stmt->execute([
-            'post_id'  => $postId,
-            'voter_id' => $user['user_id'],
-            'is_true'  => $isTrue,
-            'is_true2' => $isTrue,
-        ]);
-
-      
-        
-        $isNewVote = $stmt->rowCount() === 1;
-
-        if ($isTrue) {
-            $pdo->prepare(
-                'UPDATE users u
-                 JOIN posts p ON p.author_id = u.user_id
-                 SET u.trust_index = u.trust_index + :amount
-                 WHERE p.post_id = :post_id'
-            )->execute(['amount' => TRUST_PER_TRUE_VOTE, 'post_id' => $postId]);
-        }
-
-        if ($isNewVote) {
-            $assembled    = [];
-            $loosePieces  = 0;
-
-            if (random_int(1, 100) <= PIECE_DROP_CHANCE) {
-                $result = grantFragment($pdo, $user['user_id']);
-                $result !== null ? $assembled[] = $result : $loosePieces++;
-            }
-
-     
-            $tollStmt = $pdo->prepare(
-                "SELECT 1 FROM posts p
-                 JOIN tarot_card_buffs t ON t.tarot_id = p.active_buff_id
-                 WHERE p.post_id = :post_id
-                   AND p.buff_expires_at > NOW()
-                   AND t.effect_type = 'voter_reward'"
-            );
-            $tollStmt->execute(['post_id' => $postId]);
-
-            if ($tollStmt->fetchColumn()) {
-                $result = grantFragment($pdo, $user['user_id']);
-                $result !== null ? $assembled[] = $result : $loosePieces++;
-            }
-
-            if ($assembled) {
-                $_SESSION['flash_assembled'] = $assembled;
-            }
-            if ($loosePieces > 0) {
-                $_SESSION['flash_piece_count'] = $loosePieces;
-            }
-        }
-    }
-
-   
-    $back = 'home.php?sort=' . urlencode($_POST['sort'] ?? 'new')
-          . '&filter=' . urlencode($_POST['filter'] ?? 'all');
-    header('Location: ' . $back);
-    exit;
-}
-
-
-$flashAssembledIds = $_SESSION['flash_assembled'] ?? [];
-$flashPieceCount   = $_SESSION['flash_piece_count'] ?? 0;
-$flashAwarded      = $_SESSION['flash_awarded'] ?? null;
-$flashAwardError   = $_SESSION['flash_award_error'] ?? null;
-unset($_SESSION['flash_assembled'], $_SESSION['flash_piece_count'], $_SESSION['flash_awarded'], $_SESSION['flash_award_error']);
-
-$assembledCardNames = [];
-if ($flashAssembledIds) {
-    $placeholders = implode(',', array_fill(0, count($flashAssembledIds), '?'));
-    $stmt = $pdo->prepare("SELECT tarot_name FROM tarot_card_buffs WHERE tarot_id IN ($placeholders)");
-    $stmt->execute($flashAssembledIds);
-    $assembledCardNames = $stmt->fetchAll(PDO::FETCH_COLUMN);
-}
-
-$submitted = isset($_GET['submitted']);
-
-
+$flashAwarded    = $_SESSION['flash_awarded'] ?? null;
+$flashAwardError = $_SESSION['flash_award_error'] ?? null;
+unset($_SESSION['flash_awarded'], $_SESSION['flash_award_error']);
 
 $sortOptions = [
     'new'    => ['label' => 'Newest',        'sql' => 'p.created_at DESC'],
@@ -128,12 +39,13 @@ $stmt = $pdo->prepare(
         p.post_id, p.title, p.content, p.created_at, p.posted_anonymously,
         p.active_buff_id, p.buff_expires_at, t.tarot_name AS buff_name,
         u.user_id AS author_user_id, u.anon_handle, u.animal_username, u.is_anonymous,
-        u.custom_avatar, u.custom_avatar_status, aa.filename AS avatar_filename,
+        u.custom_avatar, u.custom_avatar_status, COALESCE(aa.display_filename, aa.filename) AS avatar_filename,
         COUNT(DISTINCT tv.vote_id) AS total_votes,
         SUM(CASE WHEN tv.is_true = 1 THEN 1 ELSE 0 END) AS true_count,
         SUM(CASE WHEN tv.is_true = 1 THEN 1 ELSE -1 END) AS score,
         (SELECT COUNT(*) FROM post_awards pa WHERE pa.post_id = p.post_id) AS award_count,
         (SELECT COUNT(*) FROM post_views pv WHERE pv.post_id = p.post_id) AS view_count,
+        (t.effect_type = 'pin_position') AS is_pinned,
         MAX(CASE WHEN tv.voter_id = :uid THEN tv.is_true END) AS my_vote
      FROM posts p
      JOIN users u ON u.user_id = p.author_id
@@ -143,15 +55,12 @@ $stmt = $pdo->prepare(
      WHERE p.status = 'approved'
      GROUP BY p.post_id
      $having
-     ORDER BY $orderBy
+     ORDER BY is_pinned DESC, $orderBy
      LIMIT 30"
 );
 $stmt->execute(['uid' => $user['user_id']]);
 $posts = $stmt->fetchAll();
 
-// Record a view for every post visible in this feed load. uniq_view (post_id,
-// viewer_id) makes this idempotent — scrolling past the same post again never
-// inflates its count.
 if ($posts) {
     $viewRows   = [];
     $viewParams = [];
@@ -164,7 +73,6 @@ if ($posts) {
         'INSERT IGNORE INTO post_views (post_id, viewer_id) VALUES ' . implode(', ', $viewRows)
     )->execute($viewParams);
 }
-
 
 $stmt = $pdo->prepare('SELECT 1 FROM user_tarot_pieces WHERE user_id = :uid LIMIT 1');
 $stmt->execute(['uid' => $user['user_id']]);
@@ -184,17 +92,15 @@ function timeAgo(string $datetime): string {
 }
 
 function postAuthorName(array $post): string {
-    if ($post['posted_anonymously'] || $post['is_anonymous'] || empty($post['animal_username'])) {
+    if ($post['is_anonymous'] || empty($post['animal_username'])) {
         return $post['anon_handle'];
     }
     return $post['animal_username'];
 }
 
 function postAuthorAvatar(array $post): string {
-
-   
-    if ($post['posted_anonymously'] || $post['is_anonymous']) {
-        return BASE_URL . 'assets/images/icons/profileDummy.png';
+    if ($post['is_anonymous']) {
+        return BASE_URL . 'assets/images/animals/CryptDefaultLambIcon.png';
     }
     if ($post['custom_avatar_status'] === 'approved' && !empty($post['custom_avatar'])) {
         return BASE_URL . 'uploads/avatars/' . $post['custom_avatar'];
@@ -202,10 +108,9 @@ function postAuthorAvatar(array $post): string {
     if (!empty($post['avatar_filename'])) {
         return BASE_URL . 'assets/images/animals/' . $post['avatar_filename'];
     }
-    return BASE_URL . 'assets/images/icons/profileDummy.png';
+    return BASE_URL . 'assets/images/animals/CryptDefaultLambIcon.png';
 }
 ?>
-
 
 <!DOCTYPE html>
 <html lang="en">
@@ -228,7 +133,7 @@ function postAuthorAvatar(array $post): string {
             transition: filter 0.3s ease, transform 0.3s ease;
         }
         .glow-wrap:hover .glow-item {
-            filter: drop-shadow(0 0 12px rgb(255, 28, 37));
+            filter: drop-shadow(0 0 8px #E11C25) drop-shadow(0 0 30px #7A0A0A);
             transform: scale(1.08) translateY(-2px);
         }
         .glow-wrap:hover span:not(.glow-item) { color: #E11C25; }
@@ -238,12 +143,12 @@ function postAuthorAvatar(array $post): string {
         .vote-active { color: #E11C25 !important; }
 
         .buff-pulse-border {
-            border: 2px solid #0D366E;
+            border: 2px solid #4d4d4d;
             animation: buff-border-pulse 2.2s ease-in-out infinite;
         }
         @keyframes buff-border-pulse {
-            0%, 100% { box-shadow: 0 0 6px rgba(13, 54, 110, 0.35); border-color: rgba(13, 54, 110, 0.5); }
-            50%      { box-shadow: 0 0 22px rgba(13, 54, 110, 0.8); border-color: rgba(13, 54, 110, 1); }
+            0%, 100% { box-shadow: 0 0 6px rgba(77, 77, 77, 0.35); border-color: rgba(77, 77, 77, 0.5); }
+            50%      { box-shadow: 0 0 22px rgba(77, 77, 77, 0.8); border-color: rgba(77, 77, 77, 1); }
         }
         .buff-pulse {
             animation: buff-pulse 1.6s ease-in-out infinite;
@@ -260,9 +165,20 @@ function postAuthorAvatar(array $post): string {
         .menu > summary::-webkit-details-marker { display: none; }
         .menu[open] > summary { color: #E11C25; }
 
+        @media (max-width: 767px) {
+            .menu-panel {
+                left: auto;
+                right: 0;
+            }
+        }
+
         .dropdown-link {
             position: relative;
         }
+        @media (max-width: 767px) {
+            .feed-header { justify-content: flex-end; }
+        }
+
         .dropdown-link:not(:last-child)::after {
             content: '';
             position: absolute;
@@ -287,18 +203,18 @@ function postAuthorAvatar(array $post): string {
 
     <?php include ROOT_PATH . 'components/sidenav.php'; ?>
 
-    <main id="mainContent" class="relative z-10 min-h-screen flex flex-col px-8 py-6">
+    <main id="mainContent" class="relative z-10 min-h-screen flex flex-col px-4 sm:px-6 md:px-8 py-6">
 
         <div class="w-full max-w-4xl mx-auto flex flex-col gap-3">
 
-           <header class="flex justify-between items-center border-b border-[#FAEAC9] pb-3 mb-8">
+           <header class="feed-header flex flex-wrap gap-3 justify-between items-center border-b border-[#FAEAC9] px-3 sm:px-5 sm:-mx-5 pb-3 mb-8">
 
-                <div class="flex items-center gap-5 text-[#FAEAC9] uppercase text-2xl tracking-wide">
+                <div class="flex items-center gap-4 sm:gap-5 text-[#FAEAC9] uppercase text-lg sm:text-xl md:text-2xl tracking-wide">
 
                     <details class="menu relative" id="filterMenu">
                         <summary class="underline underline-offset-4 hover:text-[#E11C25] transition-colors">FILTER</summary>
-                        <div class="absolute left-0 top-full mt-2 z-40 w-60">
-                            <div class="absolute inset-0 bg-[#4A4A4A]/60 backdrop-blur-sm border-[3px] border-[#7A0A0A] rounded-lg rough-border pointer-events-none"></div>
+                        <div class="menu-panel absolute left-0 top-full mt-2 z-40 w-60">
+                            <div class="absolute inset-0 bg-[#4d4d4d]/60 backdrop-blur-sm border-[3px] border-[#7A0A0A] rounded-lg rough-border pointer-events-none"></div>
                             <div class="relative z-10 py-2">
                                 <?php foreach ($filterOptions as $key => $opt): ?>
                                 <a href="<?= viewUrl($sort, $key) ?>"
@@ -312,8 +228,8 @@ function postAuthorAvatar(array $post): string {
 
                     <details class="menu relative" id="sortMenu">
                         <summary class="underline underline-offset-4 hover:text-[#E11C25] transition-colors">SORT</summary>
-                        <div class="absolute left-0 top-full mt-2 z-40 w-60">
-                            <div class="absolute inset-0 bg-[#4A4A4A]/60 backdrop-blur-sm border-[3px] border-[#7A0A0A] rounded-lg rough-border pointer-events-none"></div>
+                        <div class="menu-panel absolute left-0 top-full mt-2 z-40 w-60">
+                            <div class="absolute inset-0 bg-[#4d4d4d]/60 backdrop-blur-sm border-[3px] border-[#7A0A0A] rounded-lg rough-border pointer-events-none"></div>
                             <div class="relative z-10 py-2">
                                 <?php foreach ($sortOptions as $key => $opt): ?>
                                 <a href="<?= viewUrl($key, $filter) ?>"
@@ -327,39 +243,8 @@ function postAuthorAvatar(array $post): string {
 
                 </div>
 
-                <div class="flex items-center gap-5">
-                    <?php if (isLeader()): ?>
-                    <a href="leader.php" class="glow-wrap flex flex-col items-center text-[16px]">
-                        <div class="glow-item w-12 h-12 rounded-full border border-red-900 overflow-hidden mb-1">
-                            <img src="<?= BASE_URL ?>assets/images/icons/LeaderDashIcon.png" alt="Leader dashboard" class="w-full h-full object-cover">
-                        </div>
-                    </a>
-                    <?php endif; ?>
-                    <a href="create-post.php"
-                       class="glow-wrap w-16 h-16 flex items-center justify-center text-[#121110] text-xl font-black">
-                        <img src="<?= BASE_URL ?>assets/images/icons/CryptPlusIcon.png" alt="add post" class="glow-item w-full h-full object-cover">
-                    </a>
-                    <a href="profile.php" class="glow-wrap flex flex-col items-center text-[16px]">
-                        <div class="glow-item w-12 h-12 rounded-full border border-red-900 overflow-hidden mb-1">
-                            <img src="<?= BASE_URL ?>assets/images/icons/CryptProfileIcon.png" alt="Profile" class="w-full h-full object-cover">
-                        </div>
-                    </a>
-                </div>
+                <?php include ROOT_PATH . 'components/icon-row.php'; ?>
             </header>
-
-            <?php if ($assembledCardNames): ?>
-            <div class="border border-[#7A0A0A] bg-[#7A0A0A]/20 px-4 py-3 mb-2">
-                <p class="font-['Fira_Sans'] text-sm text-[#FAEAC9]">
-                    A card completes itself in your hand — <span class="text-[#E11C25]"><?= htmlspecialchars(implode(', ', $assembledCardNames)) ?></span> <?= count($assembledCardNames) > 1 ? 'are' : 'is' ?> yours.
-                </p>
-            </div>
-            <?php elseif ($flashPieceCount > 0): ?>
-            <div class="border border-[#7A0A0A] bg-[#7A0A0A]/10 px-4 py-3 mb-2">
-                <p class="font-['Fira_Sans'] text-sm text-[#FAEAC9]">
-                    <?= $flashPieceCount > 1 ? "Fragments ($flashPieceCount) fall" : 'A fragment falls' ?> into your keeping.
-                </p>
-            </div>
-            <?php endif; ?>
 
             <?php if ($flashAwarded): ?>
             <div class="border border-[#7A0A0A] bg-[#7A0A0A]/20 px-4 py-3 mb-2">
@@ -374,15 +259,9 @@ function postAuthorAvatar(array $post): string {
             <?php endif; ?>
 
             <?php if ($sort !== 'new' || $filter !== 'all'): ?>
-            <div class="flex items-center gap-3 font-['Fira_Sans'] text-sm text-[#9b9186] mb-1">
-                <span><?= htmlspecialchars($filterOptions[$filter]['label']) ?>, sorted by <?= strtolower($sortOptions[$sort]['label']) ?></span>
-                <a href="home.php" class="text-[#E11C25] hover:text-[#FAEAC9] transition-colors">clear</a>
-            </div>
-            <?php endif; ?>
-
-            <?php if ($submitted): ?>
-            <div class="border border-[#7A0A0A] bg-[#7A0A0A]/15 px-4 py-3 mb-2">
-                <p class="font-['Fira_Sans'] text-sm text-[#FAEAC9]">Your confession has been sent to the leader for review.</p>
+            <div class="flex items-center gap-3 text-base text-[#72685F] -mt-6 mb-1">
+                <span class="uppercase tracking-wide"><?= htmlspecialchars($filterOptions[$filter]['label']) ?>, sorted by <?= strtolower($sortOptions[$sort]['label']) ?></span>
+                <a href="home.php" class="uppercase tracking-wide text-[#E11C25] hover:text-[#FAEAC9] transition-colors">clear</a>
             </div>
             <?php endif; ?>
 
@@ -402,63 +281,54 @@ function postAuthorAvatar(array $post): string {
                 $myVote = $post['my_vote'];
                 $isBuffed = !empty($post['buff_name']);
             ?>
-            <article class="flex flex-col gap-3 border-b border-[#2a2622] pb-6 mb-2 px-5 -mx-5 pt-4 rounded-xl hover:bg-[#1c1a18]/50 transition-colors duration-200 <?= $isBuffed ? 'buff-pulse-border pb-5' : '' ?>">
+            <article id="post-<?= $post['post_id'] ?>" class="flex flex-col gap-3 border-b border-[#3a332c] pb-6 mb-2 px-3 sm:px-5 sm:-mx-5 pt-4 rounded-xl hover:bg-[#1c1a18]/50 transition-colors duration-200 <?= $isBuffed ? 'buff-pulse-border pb-5' : '' ?>">
 
-                <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 rounded-full border border-red-900 overflow-hidden bg-[#1c1a18] p-1">
-                        <img src="<?= htmlspecialchars(postAuthorAvatar($post)) ?>" alt="" class="w-full h-full object-contain">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <button type="button" class="profile-peek w-14 h-14 shrink-0 transition-transform duration-200 hover:scale-110"
+                                data-user-id="<?= (int)$post['author_user_id'] ?>" title="View profile">
+                            <img src="<?= htmlspecialchars(postAuthorAvatar($post)) ?>" alt="" class="w-full h-full object-contain">
+                        </button>
+                        <span class="text-lg sm:text-xl tracking-wider break-all"><?= htmlspecialchars(postAuthorName($post)) ?></span>
+                        <span class="w-2 h-2 rounded-full bg-[#72685F] shrink-0"></span>
+                        <span class="font-['Fira_Sans'] text-sm text-[#72685F]"><?= timeAgo($post['created_at']) ?></span>
                     </div>
-                    <span class="text-xl tracking-wider"><?= htmlspecialchars(postAuthorName($post)) ?></span>
-                    <span class="w-2 h-2 rounded-full bg-[#72685F] shrink-0"></span>
-                    <span class="font-['Fira_Sans'] text-sm text-[#72685F]"><?= timeAgo($post['created_at']) ?></span>
                 </div>
 
                 <?php if ($isBuffed): ?>
                 <div class="flex items-center gap-2">
-                    <span class="w-1.5 h-1.5 rounded-full bg-[#0D366E] buff-pulse"></span>
-                    <span class="font-['Fira_Sans'] text-xs uppercase tracking-widest text-[#0D366E]">
-                        Blessed by <?= htmlspecialchars($post['buff_name']) ?>
+                    <span class="w-2 h-2 rounded-full bg-[#4d4d4d] buff-pulse"></span>
+                    <span class="font-['Fira_Sans'] text-base uppercase tracking-widest text-[#4d4d4d]">
+                        Buffed by <?= htmlspecialchars($post['buff_name']) ?>
                     </span>
                 </div>
                 <?php endif; ?>
 
-                <h2 class="uppercase text-xl tracking-widest"><?= htmlspecialchars($post['title']) ?></h2>
+                <h2 class="uppercase text-lg sm:text-xl tracking-widest"><?= htmlspecialchars($post['title']) ?></h2>
 
                 <div class="relative w-full min-h-[160px] flex items-center px-6 py-5">
                     <div class="absolute inset-0 bg-[#121110] opacity-80 border-[4px] border-[#7A0A0A] rounded-xl rough-border pointer-events-none"></div>
-                    <p class="relative z-10 text-[#e4d5b7] font-['Fira_Sans'] text-lg leading-relaxed"><?= nl2br(htmlspecialchars($post['content'])) ?></p>
+                    <p class="relative z-10 text-[#e4d5b7] font-['Fira_Sans'] text-base sm:text-lg leading-relaxed"><?= nl2br(htmlspecialchars($post['content'])) ?></p>
                 </div>
 
-                <div class="flex items-center justify-between">
-                    <div class="flex gap-6 text-[#E11C25] font-['Fira_Sans'] font-medium text-m">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div class="flex gap-4 sm:gap-6 text-[#E11C25] font-['Fira_Sans'] font-medium text-m">
 
-                        <form method="POST" action="home.php">
-                            <input type="hidden" name="csrf" value="<?= htmlspecialchars(csrfToken()) ?>">
-                            <input type="hidden" name="vote_post_id" value="<?= $post['post_id'] ?>">
-                            <input type="hidden" name="vote_value" value="true">
-                            <input type="hidden" name="sort" value="<?= htmlspecialchars($sort) ?>">
-                            <input type="hidden" name="filter" value="<?= htmlspecialchars($filter) ?>">
-                            <button type="submit" class="glow-wrap flex flex-col items-center gap-1 transition-colors <?= $myVote === '1' ? 'vote-active' : '' ?>">
-                                <span class="icon-swap w-10 h-10 glow-item">
-                                    <img src="<?= BASE_URL ?>assets/images/icons/CryptTrueIcon.png" alt="">
-                                </span>
-                                <span class="transition-colors">True</span>
-                            </button>
-                        </form>
+                        <button type="button" class="vote-btn glow-wrap flex flex-col items-center gap-1 transition-colors <?= $myVote === '1' ? 'vote-active' : '' ?>"
+                                data-post-id="<?= $post['post_id'] ?>" data-vote="true">
+                            <span class="icon-swap w-10 h-10 glow-item">
+                                <img src="<?= BASE_URL ?>assets/images/icons/CryptTrueIcon.png" alt="">
+                            </span>
+                            <span class="transition-colors">True</span>
+                        </button>
 
-                        <form method="POST" action="home.php">
-                            <input type="hidden" name="csrf" value="<?= htmlspecialchars(csrfToken()) ?>">
-                            <input type="hidden" name="vote_post_id" value="<?= $post['post_id'] ?>">
-                            <input type="hidden" name="vote_value" value="false">
-                            <input type="hidden" name="sort" value="<?= htmlspecialchars($sort) ?>">
-                            <input type="hidden" name="filter" value="<?= htmlspecialchars($filter) ?>">
-                            <button type="submit" class="glow-wrap flex flex-col items-center gap-1 transition-colors <?= $myVote === '0' ? 'vote-active' : '' ?>">
-                                <span class="icon-swap w-10 h-10 glow-item">
-                                    <img src="<?= BASE_URL ?>assets/images/icons/CryptFalseIcon.png" alt="">
-                                </span>
-                                <span class="transition-colors">False</span>
-                            </button>
-                        </form>
+                        <button type="button" class="vote-btn glow-wrap flex flex-col items-center gap-1 transition-colors <?= $myVote === '0' ? 'vote-active' : '' ?>"
+                                data-post-id="<?= $post['post_id'] ?>" data-vote="false">
+                            <span class="icon-swap w-10 h-10 glow-item">
+                                <img src="<?= BASE_URL ?>assets/images/icons/CryptFalseIcon.png" alt="">
+                            </span>
+                            <span class="transition-colors">False</span>
+                        </button>
 
                         <?php
                       
@@ -492,7 +362,12 @@ function postAuthorAvatar(array $post): string {
                         <?php if ((int)$post['award_count'] > 0): ?>
                         <span class="text-[#7A0A0A]"><?= (int)$post['award_count'] ?> awarded</span>
                         <?php endif; ?>
-                        <span class="text-[#FAEAC9]"><?= $pct !== null ? $pct . '% true · ' . $total . ' votes' : 'No votes yet' ?></span>
+                        <div class="flex flex-col items-end gap-0.5">
+                            <span class="vote-stats text-[#FAEAC9]"><?= $pct !== null ? $pct . '% true · ' . $total . ' votes' : 'No votes yet' ?></span>
+                            <span class="text-[#72685F]">
+                                <?= (int)$post['view_count'] ?> <?= (int)$post['view_count'] === 1 ? 'view' : 'views' ?>
+                            </span>
+                        </div>
                     </div>
                 </div>
 
@@ -501,6 +376,49 @@ function postAuthorAvatar(array $post): string {
 
         </div>
     </main>
+
+         Reddit-hovercard style. The transparent backdrop only exists to catch
+         the click that dismisses it. -->
+    <div id="profilePeekBackdrop" class="hidden fixed inset-0 z-[55]"></div>
+    <div id="profilePeek" class="hidden fixed z-[60] w-[320px] rounded-2xl overflow-hidden shadow-2xl"
+         style="background-image: url('<?= BASE_URL ?>assets/images/CryptProfileTarotBg.png'); background-size: 100% 100%; background-repeat: no-repeat;">
+        <div class="px-10 pt-10 pb-8 flex flex-col items-center text-center gap-4">
+
+            <div class="flex flex-col items-center gap-2">
+                <img id="peekAvatar" src="" alt="" class="w-20 h-20 object-contain">
+                <span id="peekName" class="text-[#7A0A0A] text-lg tracking-widest uppercase leading-tight"></span>
+            </div>
+
+            <img src="<?= BASE_URL ?>assets/images/LongEyeLine.png" alt="" class="w-full h-auto">
+
+            <div class="grid grid-cols-2 gap-x-6 gap-y-4 w-full">
+                <div class="flex flex-col items-center gap-0.5">
+                    <span id="peekConfessions" class="text-[#7A0A0A] text-2xl"></span>
+                    <span class="font-['Fira_Sans'] text-sm uppercase tracking-widest text-[#121110]">Confessions</span>
+                </div>
+                <div class="flex flex-col items-center gap-0.5">
+                    <span id="peekTrust" class="text-[#7A0A0A] text-2xl"></span>
+                    <span class="font-['Fira_Sans'] text-sm uppercase tracking-widest text-[#121110]">Trust</span>
+                </div>
+                <div class="flex flex-col items-center gap-0.5">
+                    <span id="peekCards" class="text-[#7A0A0A] text-2xl"></span>
+                    <span class="font-['Fira_Sans'] text-sm uppercase tracking-widest text-[#121110]">Cards</span>
+                </div>
+                <div class="flex flex-col items-center gap-0.5">
+                    <span id="peekTruePct" class="text-[#7A0A0A] text-2xl"></span>
+                    <span class="font-['Fira_Sans'] text-sm uppercase tracking-widest text-[#121110]">Believed true</span>
+                </div>
+            </div>
+
+            <span class="font-['Fira_Sans'] text-sm uppercase tracking-widest text-[#121110]">
+                Member since <span id="peekJoined" class="text-[#7A0A0A]"></span>
+            </span>
+        </div>
+    </div>
+    </div>
+    </div>
+    </div>
+    </div>
 
     
 
@@ -530,6 +448,136 @@ function postAuthorAvatar(array $post): string {
                     }
                 });
             });
+        })();
+    </script>
+
+    <script>
+        (function () {
+            var CSRF_TOKEN = <?= json_encode(csrfToken()) ?>;
+
+            function bumpNotificationBadge() {
+                var bell = document.querySelector('a[href="notifications.php"]');
+                if (!bell) return;
+                var badge = bell.querySelector('span');
+                if (badge) {
+                    var current = parseInt(badge.textContent, 10) || 0;
+                    badge.textContent = current >= 9 ? '9+' : String(current + 1);
+                } else {
+                    badge = document.createElement('span');
+                    badge.className = "absolute top-2 right-2 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-[#E11C25] text-[#FAEAC9] text-[10px] font-['Fira_Sans'] font-bold leading-none";
+                    badge.textContent = '1';
+                    bell.appendChild(badge);
+                }
+            }
+
+            document.querySelectorAll('.vote-btn').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    var postId = btn.dataset.postId;
+                    var voteValue = btn.dataset.vote;
+                    var article = document.getElementById('post-' + postId);
+                    if (!article) return;
+
+                    btn.disabled = true;
+
+                    fetch('vote.php', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: new URLSearchParams({
+                            csrf: CSRF_TOKEN,
+                            vote_post_id: postId,
+                            vote_value: voteValue
+                        })
+                    })
+                        .then(function (r) { return r.json(); })
+                        .then(function (data) {
+                            if (!data.ok) return;
+
+                            article.querySelectorAll('.vote-btn').forEach(function (b) {
+                                b.classList.toggle('vote-active', b.dataset.vote === data.my_vote);
+                            });
+
+                            var stats = article.querySelector('.vote-stats');
+                            if (stats) {
+                                stats.textContent = data.pct !== null
+                                    ? data.pct + '% true · ' + data.total_votes + ' votes'
+                                    : 'No votes yet';
+                            }
+
+                            if (data.gained_fragment) {
+                                bumpNotificationBadge();
+                            }
+                        })
+                        .catch(function () { /* vote just won't update visually */ })
+                        .finally(function () { btn.disabled = false; });
+                });
+            });
+        })();
+    </script>
+
+    <script>
+        (function () {
+            var peek = document.getElementById('profilePeek');
+            var backdrop = document.getElementById('profilePeekBackdrop');
+            if (!peek || !backdrop) return;
+
+            function closePeek() {
+                peek.classList.add('hidden');
+                backdrop.classList.add('hidden');
+            }
+
+            function positionPeek(btn) {
+                var r = btn.getBoundingClientRect();
+                var w = peek.offsetWidth;
+                var h = peek.offsetHeight;
+                var gap = 10;
+
+                var left = r.right + gap;
+                if (left + w > window.innerWidth - 8) left = r.left - w - gap;
+                if (left < 8) left = 8;
+
+                var top = r.top;
+                if (top + h > window.innerHeight - 8) top = window.innerHeight - h - 8;
+                if (top < 8) top = 8;
+
+                peek.style.left = left + 'px';
+                peek.style.top = top + 'px';
+            }
+
+            document.querySelectorAll('.profile-peek').forEach(function (btn) {
+                btn.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    fetch('profile-card.php?user_id=' + encodeURIComponent(btn.dataset.userId))
+                        .then(function (r) { return r.json(); })
+                        .then(function (data) {
+                            if (!data.ok) return;
+
+                            document.getElementById('peekAvatar').src = data.avatar;
+                            document.getElementById('peekName').textContent = data.name;
+                            document.getElementById('peekConfessions').textContent = data.confessions;
+                            document.getElementById('peekTrust').textContent = data.trust;
+                            document.getElementById('peekJoined').textContent = data.joined;
+
+                            document.getElementById('peekCards').textContent = data.cards;
+                            document.getElementById('peekTruePct').textContent =
+                                data.true_pct === null ? '–' : data.true_pct + '%';
+
+                            peek.classList.remove('hidden');
+                            backdrop.classList.remove('hidden');
+                            positionPeek(btn);
+                        })
+                        .catch(function () { /* leave the card closed */ });
+                });
+            });
+
+            backdrop.addEventListener('click', closePeek);
+            peek.addEventListener('click', closePeek);
+            window.addEventListener('resize', closePeek);
+            window.addEventListener('scroll', closePeek, true);
+
+            document.addEventListener('keydown', function (e) {
+                if (e.key === 'Escape') closePeek();
+            });
+
         })();
     </script>
 

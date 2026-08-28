@@ -27,8 +27,6 @@ $stmt = $pdo->prepare(
 $stmt->execute(['uid' => $user['user_id']]);
 $notifications = $stmt->fetchAll();
 
-// Opening this page marks everything as read - capture which rows were still
-// unread *before* that so they can be highlighted for this one visit.
 $pdo->prepare('UPDATE notifications SET is_read = 1 WHERE user_id = :uid AND is_read = 0')
     ->execute(['uid' => $user['user_id']]);
 
@@ -70,8 +68,6 @@ function notificationLink(array $n): ?string {
         return 'claim-profile.php';
     }
     if ($n['type'] === 'post_submitted') {
-        // Still pending - it won't show up on the feed yet, so there's
-        // nowhere meaningful to send them.
         return null;
     }
     if ($n['post_id'] !== null) {
