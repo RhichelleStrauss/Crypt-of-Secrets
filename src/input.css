@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+@source "../pages";
+@source "../components";
+
 @layer utilities {
 
   .ribbon-shape {
