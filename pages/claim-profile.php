@@ -7,8 +7,12 @@ requireLogin();
 
 $user = currentUser($pdo);
 
-
 if (!$user['is_anonymous'] && !empty($user['animal_username'])) {
+    header('Location: profile.php');
+    exit;
+}
+
+if (isLeader()) {
     header('Location: profile.php');
     exit;
 }
@@ -17,11 +21,27 @@ $trust     = (int)$user['trust_index'];
 $eligible  = $trust >= TRUST_THRESHOLD;
 $error     = null;
 
-$adjectives = [
-    'Stinky', 'Silent', 'Hollow', 'Weeping', 'Grim',
-    'Ashen', 'Sullen', 'Restless', 'Wicked', 'Quiet',
+//each animal has adjectoivwes from the first letter
+//i like it like this
+//preset and dynamically chnages on screen
+$adjectivesByAnimal = [
+    'bat'       => ['Bitter', 'Blighted', 'Broken', 'Buried', 'Brittle', 'Bleak', 'Burnt', 'Bound', 'Blind', 'Barren'],
+    'bee'       => ['Bygone', 'Bloodless', 'Beckoning', 'Banished', 'Belated', 'Bereft', 'Bowed', 'Braided', 'Bristling', 'Beguiled'],
+    'seal'      => ['Silent', 'Sunken', 'Sullen', 'Solemn', 'Shrouded', 'Sorrowed', 'Salted', 'Stilled', 'Severed', 'Shivering'],
+    'frog'      => ['Fallow', 'Forsaken', 'Fevered', 'Faded', 'Fickle', 'Furrowed', 'Frayed', 'Faithless', 'Forgotten', 'Fleeting'],
+    'llama'     => ['Lonesome', 'Lowly', 'Listless', 'Lurking', 'Languid', 'Lamented', 'Loathsome', 'Lucid', 'Lulled', 'Lightless'],
+    'turtle'    => ['Tarnished', 'Tireless', 'Trembling', 'Twisted', 'Tethered', 'Thankless', 'Toiling', 'Tattered', 'Tolling', 'Timeworn'],
+    'bear'      => ['Brooding', 'Bellowing', 'Bruised', 'Baneful', 'Bloodshot', 'Burdened', 'Bygone', 'Brazen', 'Bramble', 'Blackened'],
+    'panda'     => ['Pallid', 'Penitent', 'Plodding', 'Parched', 'Pining', 'Prowling', 'Petrified', 'Patient', 'Peculiar', 'Perished'],
+    'capybara'  => ['Calm', 'Callous', 'Contrite', 'Cavernous', 'Ceaseless', 'Craven', 'Crestfallen', 'Coiled', 'Consumed', 'Cloistered'],
+    'crocodile' => ['Cruel', 'Creeping', 'Cunning', 'Croaking', 'Chastened', 'Churning', 'Coldblooded', 'Clawed', 'Condemned', 'Circling'],
 ];
 
+$defaultAdjectives = ['Silent', 'Hollow', 'Weeping', 'Grim', 'Ashen', 'Sullen', 'Restless', 'Wicked', 'Quiet', 'Shrouded'];
+
+function adjectivesFor(string $animalName, array $sets, array $fallback): array {
+    return $sets[strtolower($animalName)] ?? $fallback;
+}
 
 $stmt = $pdo->prepare(
     'SELECT avatar_id, animal_name, filename, min_trust
@@ -32,7 +52,6 @@ $stmt = $pdo->prepare(
 $stmt->execute(['trust' => $trust]);
 $available = $stmt->fetchAll();
 
-
 $stmt = $pdo->prepare(
     'SELECT animal_name, filename, min_trust
      FROM animal_avatars
@@ -41,7 +60,6 @@ $stmt = $pdo->prepare(
 );
 $stmt->execute(['trust' => $trust]);
 $locked = $stmt->fetchAll();
-
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $eligible) {
 
@@ -52,7 +70,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $eligible) {
         $adjective = $_POST['adjective'] ?? '';
 
      
-        
+        //random number genrated 
+        //number after nam egets generated
+        //loop[ tries to give random 2 dig numbner]
+        //prevent username clash
         $stmt = $pdo->prepare(
             'SELECT animal_name FROM animal_avatars
              WHERE avatar_id = :id AND min_trust <= :trust'
@@ -62,8 +83,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $eligible) {
 
         if (!$animal) {
             $error = 'That animal is not yours to take.';
-        } elseif (!in_array($adjective, $adjectives, true)) {
-            $error = 'Choose a name.';
+        } elseif (!in_array($adjective, adjectivesFor($animal['animal_name'], $adjectivesByAnimal, $defaultAdjectives), true)) {
+            $error = 'That name does not belong to that face.';
         } else {
             $base = $adjective . ucfirst($animal['animal_name']);
 
@@ -101,7 +122,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $eligible) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Claim Your Name - Crypt of Secrets</title>
+    <title>Shed Your Silence - Crypt of Secrets</title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -113,9 +134,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $eligible) {
         body { font-family: 'Eczar', serif; }
         .rough-border { filter: url(#rough-border); }
 
-        .animal-pick input:checked + div {
+        .animal-pick:hover .card-edge { border-color: #7A0A0A; }
+        .animal-pick input:checked ~ .animal-card .card-edge {
             border-color: #E11C25;
             background: rgba(122, 10, 10, 0.35);
+        }
+
+        .adj-pick .ribbon-on  { opacity: 0; }
+        .adj-pick .ribbon-off { opacity: 1; }
+        .adj-pick input:checked ~ .ribbon-wrap .ribbon-on  { opacity: 1; }
+        .adj-pick input:checked ~ .ribbon-wrap .ribbon-off { opacity: 0; }
+        .adj-pick input:checked ~ .ribbon-wrap .ribbon-label { color: #121110; }
+        .adj-pick .ribbon-wrap {
+            transition: transform 0.2s ease;
+        }
+        .adj-pick:hover .ribbon-wrap {
+            transform: scale(1.05);
         }
     </style>
 </head>
@@ -133,28 +167,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $eligible) {
 
     <?php include ROOT_PATH . 'components/sidenav.php'; ?>
 
-    <main id="mainContent" class="relative z-10 min-h-screen flex flex-col px-8 py-10">
-        <div class="w-full max-w-3xl mx-auto flex flex-col gap-8">
+    <main id="mainContent" class="relative z-10 min-h-screen flex flex-col px-4 sm:px-6 md:px-8 py-6">
+        <div class="w-full max-w-4xl mx-auto flex flex-col gap-8">
 
-            <div class="flex items-center justify-center gap-4 md:gap-8">
-                <img src="<?= BASE_URL ?>assets/images/CryptWavyMiniLineGrey.png" alt="" class="h-10 object-contain scale-x-[-1]">
-                <h1 class="text-[#FAEAC9] text-4xl tracking-widest uppercase">Step Forward</h1>
-                <img src="<?= BASE_URL ?>assets/images/CryptWavyMiniLineGrey.png" alt="" class="h-10 object-contain">
+            <header class="flex justify-end items-center border-b border-[#FAEAC9] pb-3 mb-6 md:mb-8">
+                <?php include ROOT_PATH . 'components/icon-row.php'; ?>
+            </header>
+
+            <div class="flex flex-col items-center gap-3">
+                <div class="flex items-center justify-center gap-4 md:gap-8">
+                    <img src="<?= BASE_URL ?>assets/images/CryptDoubeLineBeige.png" alt="" class="h-4 sm:h-6 md:h-8 object-contain">
+                    <h1 class="text-[#FAEAC9] text-2xl sm:text-3xl md:text-4xl tracking-widest uppercase text-center">Shed Your Silence</h1>
+                    <img src="<?= BASE_URL ?>assets/images/CryptDoubeLineBeige.png" alt="" class="h-4 sm:h-6 md:h-8 object-contain scale-x-[-1]">
+                </div>
+                <img src="<?= BASE_URL ?>assets/images/LongEyeLine.png" alt="" class="w-full max-w-[220px] h-auto drop-shadow-md">
             </div>
 
             <p class="text-center font-['Fira_Sans'] text-sm text-[#9b9186] max-w-xl mx-auto">
-                You have confessed as <span class="text-[#FAEAC9]"><?= htmlspecialchars($user['anon_handle']) ?></span>.
-                Earn the crypt's trust and it will grant you a face and a name.
+                You have confessed as <span class="font-['Eczar'] uppercase tracking-wide text-[#E11C25]"><?= htmlspecialchars($user['anon_handle']) ?></span>.
+                Trust is earned when others believe you. Gather enough of it and you may take a face and a name of your own.
             </p>
 
+            <?php
+            $segments = 20;
+            $filledSegments = (int)floor(min(1, $trust / TRUST_THRESHOLD) * $segments);
+            ?>
             <div class="flex flex-col gap-2">
-                <div class="flex justify-between font-['Fira_Sans'] text-xs uppercase tracking-widest text-[#9b9186]">
+                <div class="flex justify-between font-['Fira_Sans'] text-sm uppercase tracking-widest text-[#9b9186]">
                     <span>Trust</span>
-                    <span><?= $trust ?> / <?= TRUST_THRESHOLD ?></span>
+                    <span><span class="text-[#FAEAC9]"><?= $trust ?></span> / <?= TRUST_THRESHOLD ?></span>
                 </div>
-                <div class="w-full h-2 bg-[#1c1a18] rounded-full overflow-hidden border border-[#3a332c]">
-                    <div class="h-full bg-[#7A0A0A]"
-                         style="width: <?= min(100, $trust / TRUST_THRESHOLD * 100) ?>%"></div>
+                <div class="relative p-1.5">
+                    <div class="absolute inset-0 border-[3px] border-[#7A0A0A] rounded-lg rough-border pointer-events-none"></div>
+                    <div class="relative flex gap-1 h-6">
+                        <?php for ($i = 0; $i < $segments; $i++): ?>
+                        <div class="flex-1 rounded-sm <?= $i < $filledSegments ? 'bg-[#E11C25]' : 'bg-[#1c1a18]' ?>"></div>
+                        <?php endfor; ?>
+                    </div>
                 </div>
             </div>
 
@@ -169,8 +218,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $eligible) {
             <div class="relative p-10 text-center">
                 <div class="absolute inset-0 border-[3px] border-[#7A0A0A] rounded-xl rough-border pointer-events-none"></div>
                 <p class="relative font-['Fira_Sans'] text-sm text-[#9b9186]">
-                    The crypt does not yet know you.
-                    <?= TRUST_THRESHOLD - $trust ?> more trust and you may step forward.
+                    You are still a stranger here.
+                    <span class="text-[#FAEAC9]"><?= TRUST_THRESHOLD - $trust ?></span> more trust and a face will be yours to take.
                 </p>
             </div>
 
@@ -182,37 +231,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $eligible) {
                 <div class="flex flex-col gap-4">
                     <h2 class="text-[#FAEAC9] uppercase text-lg tracking-widest">Choose your face</h2>
 
-                    <div class="grid grid-cols-3 sm:grid-cols-5 gap-4">
+                    <div class="grid grid-cols-3 sm:grid-cols-5 gap-3 sm:gap-4">
                         <?php foreach ($available as $i => $animal): ?>
                         <label class="animal-pick cursor-pointer">
                             <input type="radio" name="avatar_id" value="<?= $animal['avatar_id'] ?>"
+                                   data-animal="<?= htmlspecialchars(strtolower($animal['animal_name'])) ?>"
                                    class="sr-only" <?= $i === 0 ? 'checked' : '' ?> required>
-                            <div class="flex flex-col items-center gap-2 p-3 rounded-xl border-2 border-[#3a332c] transition-colors hover:border-[#7A0A0A]">
-                                <div class="w-11 h-11 rounded-full overflow-hidden bg-[#1c1a18]">
-                                    <img src="<?= BASE_URL ?>assets/images/animals/<?= htmlspecialchars($animal['filename']) ?>"
-                                         alt="<?= htmlspecialchars($animal['animal_name']) ?>"
-                                         class="w-full h-full object-cover"
-                                         onerror="this.style.display='none'">
+                            <div class="animal-card relative p-3">
+                                <div class="card-edge absolute inset-0 border-[3px] border-[#3a332c] rounded-xl rough-border pointer-events-none transition-colors"></div>
+                                <div class="relative flex flex-col items-center gap-2">
+                                    <div class="w-16 h-16 rounded-full overflow-hidden bg-[#1c1a18] p-1">
+                                        <img src="<?= BASE_URL ?>assets/images/animals/<?= htmlspecialchars($animal['filename']) ?>"
+                                             alt="<?= htmlspecialchars($animal['animal_name']) ?>"
+                                             class="w-full h-full object-contain"
+                                             onerror="this.style.display='none'">
+                                    </div>
+                                    <span class="text-base uppercase tracking-wide text-[#9b9186] text-center leading-none w-full truncate">
+                                        <?= htmlspecialchars($animal['animal_name']) ?>
+                                    </span>
                                 </div>
-                                <span class="font-['Fira_Sans'] text-xs uppercase tracking-widest text-[#9b9186]">
-                                    <?= htmlspecialchars($animal['animal_name']) ?>
-                                </span>
                             </div>
                         </label>
                         <?php endforeach; ?>
                     </div>
 
                     <?php if (!empty($locked)): ?>
-                    <div class="grid grid-cols-3 sm:grid-cols-5 gap-4 opacity-30 pointer-events-none mt-2">
+                    <div class="grid grid-cols-3 sm:grid-cols-5 gap-3 sm:gap-4 opacity-30 pointer-events-none mt-2">
                         <?php foreach ($locked as $animal): ?>
-                        <div class="flex flex-col items-center gap-2 p-3 rounded-xl border-2 border-dashed border-[#3a332c]">
-                            <div class="w-11 h-11 rounded-full overflow-hidden bg-[#1c1a18] grayscale">
-                                <img src="<?= BASE_URL ?>assets/images/animals/<?= htmlspecialchars($animal['filename']) ?>"
-                                     alt="" class="w-full h-full object-cover" onerror="this.style.display='none'">
+                        <div class="relative p-3">
+                            <div class="absolute inset-0 border-[3px] border-[#3a332c] rounded-xl rough-border pointer-events-none"></div>
+                            <div class="relative flex flex-col items-center gap-2">
+                                <div class="w-16 h-16 rounded-full overflow-hidden bg-[#1c1a18] p-1 grayscale">
+                                    <img src="<?= BASE_URL ?>assets/images/animals/<?= htmlspecialchars($animal['filename']) ?>"
+                                         alt="" class="w-full h-full object-contain" onerror="this.style.display='none'">
+                                </div>
+                                <span class="text-base uppercase tracking-wide text-[#9b9186] text-center leading-none w-full truncate">
+                                    <?= (int)$animal['min_trust'] ?> trust
+                                </span>
                             </div>
-                            <span class="font-['Fira_Sans'] text-[10px] uppercase tracking-widest text-[#9b9186]">
-                                <?= (int)$animal['min_trust'] ?> trust
-                            </span>
                         </div>
                         <?php endforeach; ?>
                     </div>
@@ -222,20 +278,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $eligible) {
                 <div class="flex flex-col gap-4">
                     <h2 class="text-[#FAEAC9] uppercase text-lg tracking-widest">Choose your name</h2>
 
-                    <div class="flex flex-wrap gap-3">
-                        <?php foreach ($adjectives as $i => $adj): ?>
-                        <label class="animal-pick cursor-pointer">
+                    <?php
+                    $firstAnimal = $available[0]['animal_name'] ?? '';
+                    foreach ($available as $animal):
+                        $animalKey = strtolower($animal['animal_name']);
+                        $isFirst   = $animalKey === strtolower($firstAnimal);
+                        $adjSet    = adjectivesFor($animal['animal_name'], $adjectivesByAnimal, $defaultAdjectives);
+                    ?>
+                    <div class="adjective-set grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 sm:gap-4 <?= $isFirst ? '' : 'hidden' ?>"
+                         data-animal="<?= htmlspecialchars($animalKey) ?>">
+                        <?php foreach ($adjSet as $i => $adj): ?>
+                        <label class="adj-pick cursor-pointer">
                             <input type="radio" name="adjective" value="<?= htmlspecialchars($adj) ?>"
-                                   class="sr-only" <?= $i === 0 ? 'checked' : '' ?> required>
-                            <div class="px-4 py-2 rounded-full border-2 border-[#3a332c] font-['Fira_Sans'] text-sm transition-colors hover:border-[#7A0A0A]">
-                                <?= htmlspecialchars($adj) ?>
-                            </div>
+                                   class="sr-only" <?= $isFirst && $i === 0 ? 'checked' : '' ?>
+                                   <?= $isFirst ? '' : 'disabled' ?> required>
+                            <span class="ribbon-wrap relative flex items-center justify-center w-full">
+                                <img src="<?= BASE_URL ?>assets/images/CryptInactiveButton.png" alt=""
+                                     class="ribbon-off w-full h-auto drop-shadow-md transition-opacity">
+                                <img src="<?= BASE_URL ?>assets/images/CryptDefaultButton.png" alt=""
+                                     class="ribbon-on absolute inset-0 w-full h-auto drop-shadow-md transition-opacity">
+                                <span class="ribbon-label absolute font-['Fira_Sans'] text-[#3a332c] text-sm tracking-wide uppercase transition-colors px-2 text-center leading-none truncate max-w-full">
+                                    <?= htmlspecialchars($adj) ?>
+                                </span>
+                            </span>
                         </label>
                         <?php endforeach; ?>
                     </div>
+                    <?php endforeach; ?>
 
-                    <p class="font-['Fira_Sans'] text-xs text-[#9b9186]">
-                        A number is added to keep your name your own.
+                    <p class="font-['Fira_Sans'] text-sm text-[#72685F]">
+                        Your name is bound to the face you choose. A number is added to keep it your own.
                     </p>
                 </div>
 
@@ -243,8 +315,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $eligible) {
                     <button type="submit"
                         class="relative flex items-center justify-center group transition-transform duration-200 hover:scale-105 active:scale-95">
                         <img src="<?= BASE_URL ?>assets/images/CryptDefaultButton.png" alt="" class="w-60 h-auto drop-shadow-md">
-                        <span class="absolute text-[#FAEAC9] text-xl tracking-widest uppercase transition-colors">
-                            Take It
+                        <span class="absolute text-[#121110] text-xl tracking-widest uppercase transition-colors">
+                            Take Your Name
                         </span>
                     </button>
                 </div>
@@ -255,6 +327,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $eligible) {
 
         </div>
     </main>
+
+    <script>
+        (function () {
+            var animalInputs = document.querySelectorAll('input[name="avatar_id"]');
+            var sets = document.querySelectorAll('.adjective-set');
+            if (!animalInputs.length || !sets.length) return;
+
+            function showSetFor(animal) {
+                sets.forEach(function (set) {
+                    var matches = set.dataset.animal === animal;
+                    set.classList.toggle('hidden', !matches);
+
+                    var radios = set.querySelectorAll('input[name="adjective"]');
+                    radios.forEach(function (radio, i) {
+                        radio.disabled = !matches;
+                        if (matches && i === 0) radio.checked = true;
+                    });
+                });
+            }
+
+            animalInputs.forEach(function (input) {
+                input.addEventListener('change', function () {
+                    if (input.checked) showSetFor(input.dataset.animal);
+                });
+            });
+        })();
+    </script>
 
     <script type="module" src="<?= BASE_URL ?>assets/js/ferrofluid.js"></script>
 
