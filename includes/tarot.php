@@ -4,6 +4,7 @@
 
 function tryAssembleCard(PDO $pdo, int $userId, int $tarotId): bool {
     $stmt = $pdo->prepare(
+        //checks if the users got all four unique pieces
         'SELECT COUNT(DISTINCT piece_number) FROM user_tarot_pieces
          WHERE user_id = :uid AND tarot_id = :tid'
     );

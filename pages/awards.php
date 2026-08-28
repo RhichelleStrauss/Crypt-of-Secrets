@@ -5,8 +5,11 @@ require_once __DIR__ . '/../includes/auth.php';
 
 requireLogin();
 
-$user = currentUser($pdo);
+function viewUrl(string $sort, string $filter): string {
+    return 'awards.php?sort=' . urlencode($sort) . '&filter=' . urlencode($filter);
+}
 
+$user = currentUser($pdo);
 
 $stmt = $pdo->prepare(
     'SELECT
@@ -29,7 +32,45 @@ $unlockedCount = 0;
 foreach ($cards as $c) {
     if ($c['unlocked']) $unlockedCount++;
 }
+$totalCards = count($cards);
 
+$sortOptions = [
+    'default'  => 'Default',
+    'name'     => 'Name (A–Z)',
+    'rarity'   => 'Rarity',
+    'duration' => 'Buff duration',
+    'pieces'   => 'Pieces collected',
+];
+
+$filterOptions = [
+    'all'      => 'All cards',
+    'unlocked' => 'Owned',
+    'locked'   => 'Not owned',
+];
+
+$sort   = array_key_exists($_GET['sort']   ?? '', $sortOptions)   ? $_GET['sort']   : 'default';
+$filter = array_key_exists($_GET['filter'] ?? '', $filterOptions) ? $_GET['filter'] : 'all';
+
+if ($filter === 'unlocked') {
+    $cards = array_values(array_filter($cards, fn($c) => (bool)$c['unlocked']));
+} elseif ($filter === 'locked') {
+    $cards = array_values(array_filter($cards, fn($c) => !$c['unlocked']));
+}
+
+usort($cards, function ($a, $b) use ($sort) {
+    switch ($sort) {
+        case 'name':
+            return strcasecmp($a['tarot_name'], $b['tarot_name']);
+        case 'rarity':
+            return $b['rarity'] <=> $a['rarity'];
+        case 'duration':
+            return ($a['buff_duration'] ?? 0) <=> ($b['buff_duration'] ?? 0);
+        case 'pieces':
+            return $b['pieces'] <=> $a['pieces'];
+        default:
+            return 0; // usort is stable since PHP 8.0 - keeps the curated tarot_id order
+    }
+});
 
 $stmt = $pdo->prepare(
     'SELECT COUNT(*) FROM user_tarot_pieces WHERE user_id = :uid'
@@ -57,22 +98,67 @@ function durationLabel(?int $minutes): string {
 
     <link href="<?= BASE_URL ?>dist/output.css?v=<?php echo time(); ?>" rel="stylesheet">
 
+    <?php
+    $preloadedBacks = [];
+    foreach ($cards as $preloadCard) {
+        if ($preloadCard['unlocked'] && !empty($preloadCard['back_filename'])
+            && !in_array($preloadCard['back_filename'], $preloadedBacks, true)) {
+            $preloadedBacks[] = $preloadCard['back_filename'];
+        }
+    }
+    ?>
+    <?php foreach ($preloadedBacks as $backFile): ?>
+    <link rel="preload" as="image" href="<?= BASE_URL ?>assets/tarot/small/<?= htmlspecialchars($backFile) ?>">
+    <?php endforeach; ?>
+
     <style>
         body { font-family: 'Eczar', serif; }
         .rough-border { filter: url(#rough-border); }
 
-        .card-scene {
-            width: 210px;
-            height: 330px;
-            perspective: 900px;
+        .menu > summary {
+            list-style: none;
             cursor: pointer;
+        }
+        .menu > summary::-webkit-details-marker { display: none; }
+        .menu[open] > summary { color: #E11C25; }
+        @media (max-width: 767px) {
+            .feed-header { justify-content: flex-end; }
+            .menu-panel {
+                left: auto;
+                right: 0;
+            }
+        }
+
+        .dropdown-link {
+            position: relative;
+        }
+        .dropdown-link:not(:last-child)::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 4%;
+            width: 86%;
+            border-bottom: 1px solid rgba(228, 213, 183, 0.25);
+        }
+
+        .card-scene {
+            width: 180px;
+            height: 283px;
+            perspective: 900px;
+            -webkit-perspective: 900px;
+            cursor: pointer;
+        }
+        @media (min-width: 640px) {
+            .card-scene { width: 210px; height: 330px; }
         }
         .card-inner {
             position: relative;
             width: 100%;
             height: 100%;
             transform-style: preserve-3d;
-            transition: transform 0.65s cubic-bezier(0.4, 0, 0.2, 1);
+            -webkit-transform-style: preserve-3d;
+            transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            will-change: transform;
         }
         .card-scene.flipped .card-inner {
             transform: rotateY(180deg);
@@ -81,8 +167,10 @@ function durationLabel(?int $minutes): string {
             position: absolute;
             inset: 0;
             backface-visibility: hidden;
+            -webkit-backface-visibility: hidden;
             border-radius: 10px;
             overflow: hidden;
+            transform: translateZ(0);
         }
         .card-back-face {
             transform: rotateY(180deg);
@@ -95,16 +183,13 @@ function durationLabel(?int $minutes): string {
             filter: brightness(0.4) saturate(0.25);
         }
         .piece-pip {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            border: 1.5px solid #7A0A0A;
-        }
-        .piece-pip.filled {
-            background: #7A0A0A;
+            width: 16px;
+            height: 16px;
+            object-fit: contain;
         }
         .card-scene:not(.card-locked):hover {
-            filter: drop-shadow(0 0 10px rgba(200, 16, 46, 0.6));
+            box-shadow: 0 0 12px 2px rgba(225, 28, 37, 0.7), 0 0 40px 12px rgba(122, 10, 10, 0.9);
+            border-radius: 10px;
         }
     </style>
 </head>
@@ -122,20 +207,76 @@ function durationLabel(?int $minutes): string {
 
     <?php include ROOT_PATH . 'components/sidenav.php'; ?>
 
-    <main id="mainContent" class="relative z-10 min-h-screen flex flex-col px-8 py-10">
+    <main id="mainContent" class="relative z-10 min-h-screen flex flex-col px-4 sm:px-6 md:px-8 py-6 md:py-10">
         <div class="w-full max-w-5xl mx-auto flex flex-col gap-10">
 
-            <header class="flex justify-between items-end border-b border-[#72685F] pb-4">
-                <div>
-                    <h1 class="text-[#FAEAC9] text-3xl tracking-widest uppercase">Awards</h1>
-                    <p class="font-['Fira_Sans'] text-sm text-[#9b9186] mt-1">Collect 4 pieces to assemble a card. Flip to reveal its power.</p>
+            <header class="feed-header flex flex-wrap gap-3 justify-between items-center border-b border-[#FAEAC9] pb-3">
+
+                <div class="flex items-center gap-4 sm:gap-5 text-[#FAEAC9] uppercase text-lg sm:text-xl md:text-2xl tracking-wide">
+
+                    <details class="menu relative" id="filterMenu">
+                        <summary class="underline underline-offset-4 hover:text-[#E11C25] transition-colors">FILTER</summary>
+                        <div class="menu-panel absolute left-0 top-full mt-2 z-40 w-60">
+                            <div class="absolute inset-0 bg-[#4d4d4d]/60 backdrop-blur-sm border-[3px] border-[#7A0A0A] rounded-lg rough-border pointer-events-none"></div>
+                            <div class="relative z-10 py-2">
+                                <?php foreach ($filterOptions as $key => $label): ?>
+                                <a href="<?= viewUrl($sort, $key) ?>"
+                                   class="dropdown-link block px-4 py-2 font-['Fira_Sans'] text-sm normal-case tracking-normal transition-colors <?= $filter === $key ? 'text-[#E11C25] font-bold' : 'text-[#e4d5b7] hover:text-[#E11C25]' ?>">
+                                    <?= htmlspecialchars($label) ?>
+                                </a>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                    </details>
+
+                    <details class="menu relative" id="sortMenu">
+                        <summary class="underline underline-offset-4 hover:text-[#E11C25] transition-colors">SORT</summary>
+                        <div class="menu-panel absolute left-0 top-full mt-2 z-40 w-60">
+                            <div class="absolute inset-0 bg-[#4d4d4d]/60 backdrop-blur-sm border-[3px] border-[#7A0A0A] rounded-lg rough-border pointer-events-none"></div>
+                            <div class="relative z-10 py-2">
+                                <?php foreach ($sortOptions as $key => $label): ?>
+                                <a href="<?= viewUrl($key, $filter) ?>"
+                                   class="dropdown-link block px-4 py-2 font-['Fira_Sans'] text-sm normal-case tracking-normal transition-colors <?= $sort === $key ? 'text-[#E11C25] font-bold' : 'text-[#e4d5b7] hover:text-[#E11C25]' ?>">
+                                    <?= htmlspecialchars($label) ?>
+                                </a>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                    </details>
+
                 </div>
-                <div class="flex items-center gap-3 font-['Fira_Sans'] text-sm text-[#9b9186]">
-                    <span><span class="text-[#FAEAC9] text-lg"><?= $unlockedCount ?></span> / <?= count($cards) ?> unlocked</span>
-                </div>
+
+                <?php include ROOT_PATH . 'components/icon-row.php'; ?>
             </header>
 
-            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-8 gap-y-10 justify-items-center">
+            <div class="flex flex-col items-center gap-3">
+                <div class="flex items-center justify-center gap-4 md:gap-8">
+                    <img src="<?= BASE_URL ?>assets/images/CryptDoubeLineBeige.png" alt="" class="h-4 sm:h-6 md:h-8 object-contain">
+                    <h1 class="text-[#FAEAC9] text-2xl sm:text-3xl md:text-4xl tracking-widest uppercase text-center">Awards</h1>
+                    <img src="<?= BASE_URL ?>assets/images/CryptDoubeLineBeige.png" alt="" class="h-4 sm:h-6 md:h-8 object-contain scale-x-[-1]">
+                </div>
+                <img src="<?= BASE_URL ?>assets/images/LongEyeLine.png" alt="" class="w-full max-w-[220px] h-auto drop-shadow-md">
+                <p class="font-['Fira_Sans'] text-base text-[#72685F] text-center">Collect 4 pieces to assemble a card. Flip to reveal its power.</p>
+                <span class="font-['Fira_Sans'] text-base text-[#72685F]">
+                    <span class="text-[#FAEAC9] text-xl"><?= $unlockedCount ?></span> / <?= $totalCards ?> unlocked
+                </span>
+            </div>
+
+            <?php if ($sort !== 'default' || $filter !== 'all'): ?>
+            <div class="flex items-center gap-3 font-['Fira_Sans'] text-base text-[#72685F] -mt-6">
+                <span><?= htmlspecialchars($filterOptions[$filter]) ?>, sorted by <?= strtolower($sortOptions[$sort]) ?></span>
+                <a href="awards.php" class="text-[#E11C25] hover:text-[#FAEAC9] transition-colors">clear</a>
+            </div>
+            <?php endif; ?>
+
+            <?php if (empty($cards)): ?>
+            <div class="relative p-10 text-center">
+                <div class="absolute inset-0 border-[3px] border-[#7A0A0A] rounded-xl rough-border pointer-events-none"></div>
+                <p class="relative font-['Fira_Sans'] text-base text-[#72685F]">Nothing matches that filter.</p>
+            </div>
+            <?php endif; ?>
+
+            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-4 sm:gap-x-8 gap-y-8 sm:gap-y-10 justify-items-center">
                 <?php foreach ($cards as $card): ?>
                 <div class="flex flex-col items-center gap-3">
 
@@ -152,10 +293,10 @@ function durationLabel(?int $minutes): string {
 
                                 <?php if (!$card['unlocked']): ?>
                                 <div class="absolute inset-0 flex items-end justify-center pb-4">
-                                    <span class="font-['Fira_Sans'] text-[#4a423b] text-xs uppercase tracking-widest">Locked</span>
+                                    <span class="font-['Fira_Sans'] text-[#3a332c] text-sm uppercase tracking-widest">Locked</span>
                                 </div>
                                 <?php elseif ($card['quantity'] > 0): ?>
-                                <div class="absolute top-2 right-2 bg-[#7A0A0A] text-[#FAEAC9] font-['Fira_Sans'] text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
+                                <div class="absolute top-2 right-2 bg-[#7A0A0A] text-[#FAEAC9] font-['Fira_Sans'] text-sm rounded-full w-6 h-6 flex items-center justify-center font-bold">
                                     <?= (int)$card['quantity'] ?>
                                 </div>
                                 <?php endif; ?>
@@ -163,15 +304,15 @@ function durationLabel(?int $minutes): string {
 
                             <div class="card-face card-back-face">
                                 <?php if (!empty($card['back_filename'])): ?>
-                                <img src="<?= BASE_URL ?>assets/tarot/<?= htmlspecialchars($card['back_filename']) ?>"
+                                <img src="<?= BASE_URL ?>assets/tarot/small/<?= htmlspecialchars($card['back_filename']) ?>"
                                      alt="<?= htmlspecialchars($card['tarot_name']) ?>"
                                      class="w-full h-full object-cover"
-                                     onerror="this.style.display='none'; this.parentElement.style.background='#141210'">
+                                     onerror="this.style.display='none'; this.parentElement.style.background='#1c1a18'">
                                 <?php else: ?>
-                                <div class="w-full h-full bg-[#141210] border-2 border-[#7A0A0A] flex flex-col items-center justify-center px-3 py-5 text-center">
-                                    <h3 class="text-[#F4E9C9] text-sm leading-tight mb-3"><?= htmlspecialchars($card['tarot_name']) ?></h3>
-                                    <p class="font-['Fira_Sans'] text-[#c9b98f] text-[13px] leading-relaxed mb-3"><?= htmlspecialchars($card['effect_text']) ?></p>
-                                    <span class="font-['Fira_Sans'] text-[9px] tracking-[2px] text-[#7A0A0A] border border-[#7A0A0A] rounded-full px-3 py-0.5 uppercase">
+                                <div class="w-full h-full bg-[#1c1a18] border-2 border-[#7A0A0A] flex flex-col items-center justify-center px-3 py-5 text-center">
+                                    <h3 class="text-[#FAEAC9] text-base leading-tight mb-3"><?= htmlspecialchars($card['tarot_name']) ?></h3>
+                                    <p class="font-['Fira_Sans'] text-[#c9b98f] text-sm leading-relaxed mb-3"><?= htmlspecialchars($card['effect_text']) ?></p>
+                                    <span class="font-['Fira_Sans'] text-xs tracking-[2px] text-[#7A0A0A] border border-[#7A0A0A] rounded-full px-3 py-0.5 uppercase">
                                         <?= durationLabel($card['buff_duration'] === null ? null : (int)$card['buff_duration']) ?>
                                     </span>
                                 </div>
@@ -184,16 +325,16 @@ function durationLabel(?int $minutes): string {
                     </div>
 
                     <div class="flex flex-col items-center gap-1.5">
-                        <span class="font-['Eczar'] text-[15px] text-[#e4d5b7] text-center leading-tight max-w-[160px] tracking-wide">
+                        <span class="font-['Eczar'] text-lg text-[#e4d5b7] text-center leading-tight max-w-[180px] tracking-wide">
                             <?= htmlspecialchars($card['tarot_name']) ?>
                         </span>
 
                         <?php if ($card['unlocked'] && (int)$card['quantity'] > 0): ?>
-                        <a href="home.php"
+                        <a href="analytics.php?tab=buffs"
                            class="relative flex items-center justify-center group bg-transparent border-none cursor-pointer mt-1 transition-transform duration-300 ease-out hover:scale-110">
                             <img src="<?= BASE_URL ?>assets/images/CryptDefaultButton.png" alt=""
                                  class="h-9 w-auto object-contain">
-                            <span class="absolute inset-0 flex items-center justify-center text-[#eaddc5] group-hover:text-white text-[10px] tracking-widest uppercase transition-colors drop-shadow-md pointer-events-none">
+                            <span class="absolute inset-0 flex items-center justify-center text-[#121110] group-hover:text-[#FAEAC9] text-sm tracking-widest uppercase transition-colors drop-shadow-md pointer-events-none">
                                 Use (<?= (int)$card['quantity'] ?>)
                             </span>
                         </a>
@@ -202,16 +343,28 @@ function durationLabel(?int $minutes): string {
                         <?php if (!$card['unlocked']): ?>
                         <div class="flex gap-1.5 items-center">
                             <?php for ($i = 0; $i < 4; $i++): ?>
-                            <div class="piece-pip <?= $i < (int)$card['pieces'] ? 'filled' : '' ?>"></div>
+                            <img src="<?= BASE_URL ?>assets/images/icons/<?= $i < (int)$card['pieces'] ? 'FilledDiamondIcon.png' : 'EmptyDiamondIcon.png' ?>"
+                                 alt="" class="piece-pip">
                             <?php endfor; ?>
                         </div>
-                        <span class="font-['Fira_Sans'] text-[10px] text-[#4a423b]">
+                        <span class="font-['Fira_Sans'] text-sm text-[#72685F]">
                             <?= (int)$card['pieces'] ?> / 4 pieces
                         </span>
                         <?php else: ?>
-                        <span class="font-['Fira_Sans'] text-[10px] text-[#7A0A0A] uppercase tracking-widest">
+                        <span class="font-['Fira_Sans'] text-sm font-bold text-[#7A0A0A] uppercase tracking-widest">
                             Unlocked
                         </span>
+                        <?php if ((int)$card['pieces'] > 0): ?>
+                        <div class="flex gap-1.5 items-center mt-1">
+                            <?php for ($i = 0; $i < 4; $i++): ?>
+                            <img src="<?= BASE_URL ?>assets/images/icons/<?= $i < (int)$card['pieces'] ? 'FilledDiamondIcon.png' : 'EmptyDiamondIcon.png' ?>"
+                                 alt="" class="piece-pip">
+                            <?php endfor; ?>
+                        </div>
+                        <span class="font-['Fira_Sans'] text-sm text-[#72685F]">
+                            <?= (int)$card['pieces'] ?> / 4 toward next copy
+                        </span>
+                        <?php endif; ?>
                         <?php endif; ?>
                     </div>
 
@@ -219,13 +372,18 @@ function durationLabel(?int $minutes): string {
                 <?php endforeach; ?>
             </div>
 
-            <div class="border-t border-[#72685F] pt-6 flex flex-col gap-3">
-                <h2 class="text-[#FAEAC9] uppercase text-lg tracking-widest">Piece collection</h2>
-                <p class="font-['Fira_Sans'] text-sm text-[#9b9186]">
+            <div class="flex flex-col items-center gap-3 border-t border-[#72685F] pt-8">
+                <div class="flex items-center justify-center gap-4 md:gap-8">
+                    <img src="<?= BASE_URL ?>assets/images/CryptDoubeLineBeige.png" alt="" class="h-4 sm:h-6 md:h-8 object-contain">
+                    <h2 class="text-[#FAEAC9] text-2xl sm:text-3xl md:text-4xl tracking-widest uppercase text-center">Piece Collection</h2>
+                    <img src="<?= BASE_URL ?>assets/images/CryptDoubeLineBeige.png" alt="" class="h-4 sm:h-6 md:h-8 object-contain scale-x-[-1]">
+                </div>
+                <img src="<?= BASE_URL ?>assets/images/LongEyeLine.png" alt="" class="w-full max-w-[220px] h-auto drop-shadow-md">
+                <p class="font-['Fira_Sans'] text-base text-[#72685F] text-center max-w-xl">
                     Earn pieces by passing judgement on confessions. Every vote carries a chance
                     of a fragment. Gather all four of a card to assemble it.
                 </p>
-                <span class="font-['Fira_Sans'] text-xs text-[#9b9186] mt-1">
+                <span class="font-['Fira_Sans'] text-base text-[#72685F]">
                     <?= $loosePieces ?> <?= $loosePieces === 1 ? 'fragment' : 'fragments' ?> held
                 </span>
             </div>
@@ -238,6 +396,30 @@ function durationLabel(?int $minutes): string {
         el.classList.toggle('flipped');
     }
 
+    (function () {
+        var filterMenu = document.getElementById('filterMenu');
+        var sortMenu = document.getElementById('sortMenu');
+        var navMenus = [filterMenu, sortMenu].filter(Boolean);
+        if (!navMenus.length) return;
+
+        navMenus.forEach(function (menu) {
+            menu.addEventListener('toggle', function () {
+                if (menu.open) {
+                    navMenus.forEach(function (other) {
+                        if (other !== menu) other.removeAttribute('open');
+                    });
+                }
+            });
+        });
+
+        document.addEventListener('click', function (e) {
+            navMenus.forEach(function (menu) {
+                if (menu.open && !menu.contains(e.target)) {
+                    menu.removeAttribute('open');
+                }
+            });
+        });
+    })();
     </script>
     <script type="module" src="<?= BASE_URL ?>assets/js/ferrofluid.js"></script>
 

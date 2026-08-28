@@ -1,12 +1,46 @@
 <style>
-    #mainContent {
-        margin-left: 90px;
-        transition: margin-left 500ms ease-out;
+    @media (min-width: 768px) {
+        #mainContent {
+            margin-left: 160px;
+            transition: margin-left 500ms ease-out;
+        }
+        aside:hover ~ #mainContent,
+        aside:focus-within ~ #mainContent {
+            margin-left: 460px;
+        }
     }
 
-    aside:hover~#mainContent,
-    aside:focus-within~#mainContent {
-        margin-left: 400px;
+    @media (max-width: 767px) {
+        #mainContent {
+            margin-left: 0;
+            padding-top: 4rem;
+        }
+        #sidenav {
+            width: 80vw;
+            transform: translateX(-100%);
+            transition: transform 300ms ease-out;
+            visibility: hidden;
+        }
+        #sidenav.nav-open {
+            transform: translateX(0);
+            visibility: visible;
+        }
+
+        #sidenav .nav-panel {
+            width: 72%;
+            padding-left: 0;
+            padding-top: 0;
+            padding-right: 0;
+            align-items: center;
+            justify-content: center;
+        }
+        #sidenav .nav-panel nav {
+            width: 100%;
+            margin-top: 2rem;
+        }
+        #sidenav .nav-panel > div:first-child {
+            width: 70%;
+        }
     }
 
     #goo-container {
@@ -26,40 +60,76 @@
     }
 </style>
 
-<aside class="fixed top-0 left-0 h-screen w-[380px] -translate-x-[300px] hover:translate-x-0 focus-within:translate-x-0 transition-transform duration-500 ease-out z-50">
+<button type="button" id="navToggle" aria-label="Open menu" aria-expanded="false"
+        class="md:hidden fixed top-3 left-3 z-[80] w-10 h-10 flex flex-col items-center justify-center gap-[5px] rounded-lg bg-[#1c1a18]/95 border border-[#7A0A0A]">
+    <span class="block w-5 h-[2px] bg-[#e4d5b7]"></span>
+    <span class="block w-5 h-[2px] bg-[#e4d5b7]"></span>
+    <span class="block w-5 h-[2px] bg-[#e4d5b7]"></span>
+</button>
+
+<div id="navBackdrop" class="hidden md:hidden fixed inset-0 z-[45] bg-[#72685F]/70"></div>
+
+<aside id="sidenav" class="fixed top-0 left-0 h-screen md:w-[380px] md:-translate-x-[300px] md:hover:translate-x-0 md:focus-within:translate-x-0 md:transition-transform md:duration-500 md:ease-out z-50">
 
     <div id="goo-container"></div>
 
-    <div class="relative z-10 w-[280px] h-full flex flex-col pt-12 pl-10">
+    <div class="nav-panel relative z-10 w-[280px] h-full flex flex-col pt-12 pl-10 overflow-y-auto">
 
         <div class="text-[#121110] px-4 py-2 text-center tracking-widest">
             <img src="/crypt-of-secrets/assets/images/icons/CryptLogo.png" alt="Logo" class="w-full h-full object-cover">
         </div>
 
         <nav class="flex flex-col text-center gap-6 mt-6">
-            <a href="home.php" class="text-[#eaddc5] hover:text-[#72685F] text-3xl tracking-widest uppercase transition-colors">
+            <a href="home.php" class="text-[#e4d5b7] hover:text-[#72685F] text-2xl md:text-3xl tracking-widest uppercase transition-colors">
                 HOME
             </a>
-            <a href="create-post.php" class="text-[#eaddc5] hover:text-[#72685F] text-3xl tracking-widest uppercase transition-colors">
+            <a href="create-post.php" class="text-[#e4d5b7] hover:text-[#72685F] text-2xl md:text-3xl tracking-widest uppercase transition-colors">
                 CREATE POST
             </a>
-            <a href="profile.php" class="text-[#eaddc5] hover:text-[#72685F] text-3xl tracking-widest uppercase transition-colors">
+            <a href="profile.php" class="text-[#e4d5b7] hover:text-[#72685F] text-2xl md:text-3xl tracking-widest uppercase transition-colors">
                 PROFILE
             </a>
-            <a href="analytics.php" class="text-[#eaddc5] hover:text-[#72685F] text-3xl tracking-widest uppercase transition-colors">
+            <a href="analytics.php" class="text-[#e4d5b7] hover:text-[#72685F] text-2xl md:text-3xl tracking-widest uppercase transition-colors">
                 ANALYTICS
             </a>
-            <a href="awards.php" class="text-[#eaddc5] hover:text-[#72685F] text-3xl tracking-widest uppercase transition-colors">
+            <a href="awards.php" class="text-[#e4d5b7] hover:text-[#72685F] text-2xl md:text-3xl tracking-widest uppercase transition-colors">
                 AWARDS
             </a>
         </nav>
-        <?php if ($user['is_anonymous'] ?? false): ?>
-            <a href="claim-profile.php" class="text-[#7A0A0A] hover:text-[#E11C25] text-3xl tracking-widest uppercase transition-colors">
-                STEP FORWARD
-            </a>
-        <?php endif; ?>
     </div>
 </aside>
+
+<script>
+    (function () {
+        var toggle = document.getElementById('navToggle');
+        var nav = document.getElementById('sidenav');
+        var backdrop = document.getElementById('navBackdrop');
+        if (!toggle || !nav || !backdrop) return;
+
+        function setOpen(open) {
+            nav.classList.toggle('nav-open', open);
+            if (open) {
+                requestAnimationFrame(function () {
+                    window.dispatchEvent(new Event('resize'));
+                });
+            }
+            backdrop.classList.toggle('hidden', !open);
+            toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+            document.body.classList.toggle('overflow-hidden', open);
+        }
+
+        toggle.addEventListener('click', function () {
+            setOpen(!nav.classList.contains('nav-open'));
+        });
+        backdrop.addEventListener('click', function () { setOpen(false); });
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') setOpen(false);
+        });
+        window.addEventListener('resize', function () {
+            if (window.innerWidth >= 768) setOpen(false);
+        });
+    })();
+</script>
 
 <script type="module">
     import {
@@ -227,6 +297,13 @@ float g = fbm(px / (uFeature * 1.37) + vec2(-t * 0.31, t * 0.09) + 19.7);
         if (rect.width === 0 || rect.height === 0) return;
         renderer.setSize(rect.width, rect.height);
         uniforms.iResolution.value = [rect.width, rect.height];
+
+        const aside = document.getElementById('sidenav');
+        if (window.matchMedia('(max-width: 767px)').matches && aside) {
+            uniforms.uBaseEdge.value = aside.getBoundingClientRect().width * 0.95;
+        } else {
+            uniforms.uBaseEdge.value = goo.baseEdge;
+        }
     }
     window.addEventListener('resize', resize);
     resize();
