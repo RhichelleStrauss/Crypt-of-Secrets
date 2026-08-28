@@ -1,6 +1,9 @@
 <?php
 
 
+//counts eaxct piece number a user hpolds for each card
+//exact - 1/4 is 1/4 so if you have 4 of the same 1/4, it no count as card
+//when 4 is got fragments go bye and card is made
 
 function tryAssembleCard(PDO $pdo, int $userId, int $tarotId): bool {
     $stmt = $pdo->prepare(
@@ -45,7 +48,10 @@ function grantFragment(PDO $pdo, int $userId): ?int {
 }
 
 
-
+//user gifts, gives a piece from their collection instead of crafting one from like nothing
+//ranom fragment
+//deletes the piece for user giving aka giver and inserts it to the user
+//awarding is a transfer
 function giftRandomFragment(PDO $pdo, int $giverId, int $recipientId): ?array {
     $stmt = $pdo->prepare(
         'SELECT piece_id, tarot_id, piece_number FROM user_tarot_pieces

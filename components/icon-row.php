@@ -1,5 +1,7 @@
 <?php
 require_once __DIR__ . '/../includes/notifications.php';
+//component comes twce
+//component looks diffy on mnobile 
 
 $unreadCount = unreadNotificationCount($pdo, $user['user_id']);
 

@@ -29,6 +29,9 @@ if (!checkCsrf($_POST['csrf'] ?? null)) {
 $postId = (int)$_POST['vote_post_id'];
 $isTrue = $_POST['vote_value'] === 'true' ? 1 : 0;
 
+// isnewvote can identify a frst time voter form a different user changing mind or playiong with buttons 
+//stops vote farming - otherwise duplicates and like WAAAYYYY too many votes, no dupliocates is like instagram bots
+
 $stmt = $pdo->prepare(
     //switching votes true false false true
     // no duplicates

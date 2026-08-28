@@ -91,6 +91,9 @@ function timeAgo(string $datetime): string {
     return floor($diff / 2592000) . 'mo ago';
 }
 
+//llooks at if anonymous
+//when someone gets name it showd their usrname no matter how old
+//to see if someone is trusty
 function postAuthorName(array $post): string {
     if ($post['is_anonymous'] || empty($post['animal_username'])) {
         return $post['anon_handle'];

@@ -4,6 +4,7 @@ require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/notifications.php';
 
+//checks if user logged in is leader
 requireLeader();
 
 $user   = currentUser($pdo);

@@ -29,6 +29,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif (mb_strlen($body) > 4000) {
             $error = 'That confession is too long.';
         } else {
+            //if leader 
+            //POSTEDDDD
+            //haha suckers
+            
             $isLeaderPost = $action !== 'draft' && isLeader();
             $status = $action === 'draft' ? 'draft' : ($isLeaderPost ? 'approved' : 'pending');
 
