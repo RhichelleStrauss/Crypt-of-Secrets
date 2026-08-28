@@ -12,8 +12,11 @@ USE crypt_of_secrets;
 CREATE TABLE animal_avatars (
     avatar_id   INT AUTO_INCREMENT PRIMARY KEY,
     animal_name VARCHAR(50)  NOT NULL UNIQUE,
-    filename    VARCHAR(255) NOT NULL,
-    min_trust   INT          NOT NULL DEFAULT 50
+    -- filename = small icon shown in the claim picker
+    -- display_filename = full icon worn on profiles, posts and the icon row
+    filename         VARCHAR(255) NOT NULL,
+    display_filename VARCHAR(255) NULL,
+    min_trust        INT          NOT NULL DEFAULT 50
 ) ENGINE=InnoDB;
 
 
@@ -82,6 +85,11 @@ CREATE TABLE posts (
     status ENUM('draft','pending','approved','rejected')
            NOT NULL DEFAULT 'pending',
 
+    -- leader's decision trail: why a confession was denied, who ruled, when --
+    review_note VARCHAR(255) NULL,
+    reviewed_by INT          NULL,
+    reviewed_at DATETIME     NULL,
+
 
     posted_anonymously BOOLEAN NOT NULL DEFAULT TRUE,
 
@@ -93,6 +101,7 @@ CREATE TABLE posts (
 
     FOREIGN KEY (author_id)      REFERENCES users(user_id) ON DELETE CASCADE,
     FOREIGN KEY (active_buff_id) REFERENCES tarot_card_buffs(tarot_id) ON DELETE SET NULL,
+    FOREIGN KEY (reviewed_by)    REFERENCES users(user_id) ON DELETE SET NULL,
     INDEX idx_status (status),
     INDEX idx_created (created_at)
 ) ENGINE=InnoDB;
@@ -188,7 +197,7 @@ CREATE TABLE notifications (
     user_id    INT NOT NULL,
     type       ENUM(
         'post_approved','post_rejected','award_received',
-        'fragment_gained','vote_received','trust_threshold'
+        'fragment_gained','vote_received','trust_threshold','post_submitted'
     ) NOT NULL,
     post_id    INT NULL,
     is_read    BOOLEAN NOT NULL DEFAULT FALSE,
@@ -200,29 +209,29 @@ CREATE TABLE notifications (
 
 
 -- files for the avatars and the trust needed to use them --
-INSERT INTO animal_avatars (animal_name, filename, min_trust) VALUES
-    ('cow',       'Temp_CowIcon.webp',        50),
-    ('frog',      'Temp_FrogIcon.webp',       50),
-    ('bee',       'Temp_BeeIcon.webp',        50),
-    ('ladybug',   'Temp_LadybugIcon.webp',    50),
-    ('turtle',    'Temp_TurtleIcon.webp',     50),
-    ('bat',       'Temp_BatIcon.webp',        50),
-    ('bear',      'Temp_BearIcon.webp',      120),
-    ('panda',     'Temp_PandaIcon.webp',     120),
-    ('capybara',  'Temp_CapybaraIcon.webp',  200),
-    ('crocodile', 'Temp_CrocodileIcon.webp', 200);
+INSERT INTO animal_avatars (animal_name, filename, display_filename, min_trust) VALUES
+    ('seal',      'Temp_SealIcon.webp',      'CryptSealIcon.png',       50),
+    ('frog',      'Temp_FrogIcon.webp',      'CryptFrogIcon.png',       50),
+    ('bee',       'Temp_BeeIcon.webp',       'CryptBeeIcon.png',        50),
+    ('llama',     'Temp_LlamaIcon.png',      'CryptLlamaIcon.png',      50),
+    ('turtle',    'Temp_TurtleIcon.webp',    'CryptTurtleIcon.png',     50),
+    ('bat',       'Temp_BatIcon.webp',       'CryptBatIcon.png',        50),
+    ('bear',      'Temp_BearIcon.webp',      'CryptBearIcon.png',      120),
+    ('panda',     'Temp_PandaIcon.png' ,     'CryptPandaIcon.png',     120),
+    ('capybara',  'Temp_CapybaraIcon.webp',  'CryptCapybaraIcon.png',  200),
+    ('crocodile', 'Temp_CrocodileIcon.webp', 'CryptCrocodileIcon.png', 200);
 
 -- the values of the buffs, names of the files, the value, duration etc --
 INSERT INTO tarot_card_buffs
     (tarot_name, icon_filename, back_filename, effect_type, effect_value, effect_text, buff_duration, rarity)
 VALUES
-    ("The Confessor's Mark", 'TempTarot_TheConfessorsMark.png', 'TarotBack_TheConfessorsMark.png', 'score_multiplier',  1.50, 'Boosts post popularity 1.5x',        1440, 1),
-    ('Whispered Truth',      'TempTarot_WhisperedTruth.png',    'TarotBack_WhisperedTruth.png',    'vote_weight',       2.00, 'True votes count double',             720, 2),
-    ('Veil of Silence',      'TempTarot_VeilOfSilence.png',     'TarotBack_VeilOfSilence.png',     'hide_false_votes',  NULL, 'Hides false vote count',             1440, 2),
-    ('Rite of Remaining',    'TempTarot_RiteOfRemaining.png',   'TarotBack_RiteOfRemaining.png',   'pin_position',      NULL, 'The crypt does not bury what it has chosen to remember', 1440, 1),
-    ('Ashes to Ashes',       'TempTarot_AshesToAshes.png',      'TarotBack_AshesToAshes.png',      'reset_false_votes', NULL, 'Resets accumulated false votes',     NULL, 3),
-    ('The Unblinking Eye',   'TempTarot_TheUnblinkingEye.png',  'TarotBack_TheUnblinkingEye.png',  'piece_drop_rate',   2.00, 'Doubles tarot piece drop rate',       360, 2),
-    ('The Toll',             'TempTarot_TheToll.png',           'TarotBack_TheToll.png',           'voter_reward',      1.00, 'None pass judgement here without being paid', 1440, 2),
-    ('Second Chance',        'TempTarot_SecondChance.png',      'TarotBack_SecondChance.png',      'reset_ratio',       NULL, 'Resets vote ratio to 0-0',           NULL, 3),
-    ("Fortune's Favour",     'TempTarot_FortunesFavour.png',    'TarotBack_FortunesFavour.png',    'vote_trickle',      1.00, '+1 true vote per hour passively',     720, 2),
-    ('The Hollow Choir',     'TempTarot_TheHollowChoir.png',    'TarotBack_TheHollowChoir.png',    'feed_priority',     NULL, 'Boosts feed priority without votes', 1440, 3);
+    ("The Confessor's Mark", 'FrontCryptTarot_TheConfessorsMark.png', 'TarotBack_TheConfessorsMark.png', 'score_multiplier',  1.50, 'Boosts post popularity 1.5x',        1440, 1),
+    ('Whispered Truth',      'FrontCryptTarot_WhisperedTruth.png',    'TarotBack_WhisperedTruth.png',    'vote_weight',       2.00, 'True votes count double',             720, 2),
+    ('Veil of Silence',      'FrontCryptTarot_VeilOfSilence.png',     'TarotBack_VeilOfSilence.png',     'hide_false_votes',  NULL, 'Hides false vote count',             1440, 2),
+    ('Rite of Remaining',    'FrontCryptTarot_RiteOfRemaining.png',   'TarotBack_RiteOfRemaining.png',   'pin_position',      NULL, 'The crypt does not bury what it has chosen to remember', 1440, 1),
+    ('Ashes to Ashes',       'FrontCryptTarot_AshesToAshes.png',      'TarotBack_AshesToAshes.png',      'reset_false_votes', NULL, 'Resets accumulated false votes',     NULL, 3),
+    ('The Unblinking Eye',   'FrontCryptTarot_TheUnblinkingEye.png',  'TarotBack_TheUnblinkingEye.png',  'piece_drop_rate',   2.00, 'Doubles tarot piece drop rate',       360, 2),
+    ('The Toll',             'FrontCryptTarot_TheToll.png',           'TarotBack_TheToll.png',           'voter_reward',      1.00, 'None pass judgement here without being paid', 1440, 2),
+    ('Second Chance',        'FrontCryptTarot_SecondChance.png',      'TarotBack_SecondChance.png',      'reset_ratio',       NULL, 'Resets vote ratio to 0-0',           NULL, 3),
+    ("Fortune's Favour",     'FrontCryptTarot_FortunesFavor.png',    'TarotBack_FortunesFavor.png',    'vote_trickle',      1.00, '+1 true vote per hour passively',     720, 2),
+    ('The Hollow Choir',     'FrontCryptTarot_TheHollowChoir.png',    'TarotBack_TheHollowChoir.png',    'feed_priority',     NULL, 'Boosts feed priority without votes', 1440, 3);
